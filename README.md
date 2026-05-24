@@ -27,6 +27,22 @@ The module supports:
 > class. Hoop detection requires custom YOLOv8 weights with a class name such as
 > `hoop`, `basketball hoop`, `rim`, or another configured alias.
 
+
+## Repository workflow
+
+Branching guidance lives in [`docs/repository-workflow.md`](docs/repository-workflow.md):
+
+- `main` is stable/demo-ready only.
+- `dev` is for active integration work.
+- `feature/*` branches are for isolated modules and experiments.
+
+Local CV artifacts belong in top-level workspace folders and are ignored by Git:
+
+- `videos/` for raw/local clips
+- `outputs/` for processed videos, debug frames, and detection exports
+- `models/` for YOLO weights and exported model files
+- `notebooks/` for exploratory notebooks
+
 ## Folder structure
 
 ```text
