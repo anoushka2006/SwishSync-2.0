@@ -167,6 +167,15 @@ swishsync-cv \
   --output-dir outputs
 ```
 
+If your Python environment installs console scripts outside your shell `PATH`,
+use the module entry point instead:
+
+```bash
+python3 -m swishsync_cv.cli \
+  --input path/to/basketball_clip.mp4 \
+  --output-dir outputs
+```
+
 Run with custom weights that include hoop/rim classes:
 
 ```bash
