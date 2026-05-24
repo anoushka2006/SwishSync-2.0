@@ -1,5 +1,6 @@
 # Python caches and build artifacts
 __pycache__/
+**pycache**/
 *.py[cod]
 *$py.class
 .pytest_cache/
@@ -28,6 +29,7 @@ env/
 # Computer vision datasets, videos, and generated outputs
 videos/*
 !videos/.gitkeep
+outputs/
 outputs/*
 !outputs/.gitkeep
 runs/
@@ -35,6 +37,7 @@ tmp/
 temp/
 
 # Model weights and exported inference engines
+models/
 models/*
 !models/.gitkeep
 *.pt
