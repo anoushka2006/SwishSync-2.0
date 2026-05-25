@@ -9,8 +9,10 @@ from pathlib import Path
 from swishsync_cv.data import (
     CompletedShot,
     DetectionRecord,
+    FitDiagnostics,
     FrameDetections,
     ParabolaFit,
+    PointDiagnostic,
     ShotAxis,
     ShotCandidate,
     SparseBallDetection,
@@ -114,6 +116,30 @@ def parabola_fit_to_dict(fit: ParabolaFit) -> dict[str, object]:
         "apex_y": fit.apex_y,
         "x_min": fit.x_min,
         "x_max": fit.x_max,
+        "weighted_r_squared": fit.weighted_r_squared,
+        "weighted_residual_rmse": fit.weighted_residual_rmse,
+    }
+
+
+def point_diagnostic_to_dict(point: PointDiagnostic) -> dict[str, object]:
+    return {
+        "frame_index": point.frame_index,
+        "x": point.x,
+        "y": point.y,
+        "confidence": point.confidence,
+        "fitting_weight": point.fitting_weight,
+        "residual_px": point.residual_px,
+        "is_outlier": point.is_outlier,
+    }
+
+
+def fit_diagnostics_to_dict(diagnostics: FitDiagnostics) -> dict[str, object]:
+    return {
+        "point_count": diagnostics.point_count,
+        "average_detection_confidence": diagnostics.average_detection_confidence,
+        "weighted_residual_rmse": diagnostics.weighted_residual_rmse,
+        "outlier_count": diagnostics.outlier_count,
+        "points": [point_diagnostic_to_dict(point) for point in diagnostics.points],
     }
 
 
@@ -134,6 +160,11 @@ def shot_candidate_to_dict(candidate: ShotCandidate) -> dict[str, object]:
         "parabola_fit": (
             parabola_fit_to_dict(candidate.parabola_fit)
             if candidate.parabola_fit is not None
+            else None
+        ),
+        "fit_diagnostics": (
+            fit_diagnostics_to_dict(candidate.fit_diagnostics)
+            if candidate.fit_diagnostics is not None
             else None
         ),
         "confidence": (

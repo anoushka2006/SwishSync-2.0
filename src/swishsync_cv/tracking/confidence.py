@@ -2,22 +2,20 @@
 
 from __future__ import annotations
 
-from swishsync_cv.data import ConfidenceScores, HoopLock, ParabolaFit, ShotCandidate, SparseBallDetection
+from swishsync_cv.data import ConfidenceScores, FitDiagnostics, ParabolaFit, ShotCandidate, SparseBallDetection
 
 
-def score_shot_confidence(
-    candidate: ShotCandidate,
-    hoop_lock: HoopLock | None = None,
-) -> ConfidenceScores:
-    """Compute detection, trajectory, and overall confidence for a shot."""
+def score_shot_confidence(candidate: ShotCandidate) -> ConfidenceScores:
+    """Compute detection, trajectory, and overall confidence for a finalized shot."""
 
-    detection_confidence = _detection_confidence(candidate.validated_points)
+    points = candidate.candidate_points
+    detection_confidence = _detection_confidence(points)
     trajectory_confidence = _trajectory_confidence(
-        validated_points=candidate.validated_points,
+        points=points,
         parabola_fit=candidate.parabola_fit,
-        hoop_lock=hoop_lock,
+        fit_diagnostics=candidate.fit_diagnostics,
     )
-    overall_confidence = 0.45 * detection_confidence + 0.55 * trajectory_confidence
+    overall_confidence = 0.40 * detection_confidence + 0.60 * trajectory_confidence
     return ConfidenceScores(
         detection_confidence=detection_confidence,
         trajectory_confidence=trajectory_confidence,
@@ -25,35 +23,40 @@ def score_shot_confidence(
     )
 
 
-def _detection_confidence(validated_points: list[SparseBallDetection]) -> float:
-    if not validated_points:
+def _detection_confidence(points: list[SparseBallDetection]) -> float:
+    if not points:
         return 0.0
 
-    measured = [point for point in validated_points if not point.interpolated]
-    coverage = len(measured) / max(len(validated_points), 1)
+    measured = [point for point in points if not point.interpolated]
+    coverage = len(measured) / max(len(points), 1)
     avg_confidence = sum(point.confidence for point in measured) / max(len(measured), 1)
-    count_factor = min(len(validated_points) / 8.0, 1.0)
-    return max(0.0, min(1.0, avg_confidence * coverage * 0.7 + count_factor * 0.3))
+    count_factor = min(len(points) / 8.0, 1.0)
+    return max(0.0, min(1.0, avg_confidence * coverage * 0.65 + count_factor * 0.35))
 
 
 def _trajectory_confidence(
-    validated_points: list[SparseBallDetection],
+    points: list[SparseBallDetection],
     parabola_fit: ParabolaFit | None,
-    hoop_lock: HoopLock | None,
+    fit_diagnostics: FitDiagnostics | None,
 ) -> float:
-    if len(validated_points) < 3 or parabola_fit is None:
+    if len(points) < 3 or parabola_fit is None or fit_diagnostics is None:
         return 0.0
 
-    fit_quality = parabola_fit.r_squared
-    smoothness = _motion_smoothness(validated_points)
-    continuity = min(len(validated_points) / 10.0, 1.0)
-    hoop_consistency = _hoop_consistency(parabola_fit, hoop_lock)
+    fit_quality = parabola_fit.weighted_r_squared
+    residual_quality = max(0.0, min(1.0, 1.0 - fit_diagnostics.weighted_residual_rmse / 45.0))
+    continuity = min(len(points) / 10.0, 1.0)
+    smoothness = _motion_smoothness(points)
+    outlier_penalty = max(
+        0.0,
+        1.0 - fit_diagnostics.outlier_count / max(len(points), 1),
+    )
 
     score = (
-        0.40 * fit_quality
-        + 0.30 * smoothness
-        + 0.15 * continuity
-        + 0.15 * hoop_consistency
+        0.30 * fit_quality
+        + 0.30 * residual_quality
+        + 0.20 * smoothness
+        + 0.10 * continuity
+        + 0.10 * outlier_penalty
     )
     return max(0.0, min(1.0, score))
 
@@ -78,12 +81,3 @@ def _motion_smoothness(points: list[SparseBallDetection]) -> float:
 
     average_change = sum(velocity_changes) / len(velocity_changes)
     return max(0.0, min(1.0, 1.0 - average_change / 25.0))
-
-
-def _hoop_consistency(parabola_fit: ParabolaFit, hoop_lock: HoopLock | None) -> float:
-    if hoop_lock is None:
-        return 0.5
-
-    predicted_y = parabola_fit.evaluate_y(hoop_lock.center_x)
-    distance = abs(predicted_y - hoop_lock.center_y)
-    return max(0.0, min(1.0, 1.0 - distance / 120.0))

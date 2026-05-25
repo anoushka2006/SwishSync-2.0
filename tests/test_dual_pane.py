@@ -2,7 +2,7 @@ import numpy as np
 
 from swishsync_cv.config import ShotCandidateConfig
 from swishsync_cv.data import ShotCandidate, SparseBallDetection
-from swishsync_cv.tracking.parabola import fit_parabola
+from swishsync_cv.tracking.parabola import fit_weighted_parabola
 from swishsync_cv.tracking.shot_candidate import ShotCandidateManager
 from swishsync_cv.tracking.shot_finalization import finalize_shot
 from swishsync_cv.visualization.trajectory_panel import compose_dual_pane, render_trajectory_panel
@@ -22,7 +22,9 @@ def test_finalize_shot_fits_once_from_buffered_points():
 
     assert finalized.state == "shot_finalized"
     assert finalized.parabola_fit is not None
-    assert candidate.parabola_fit is not None
+    assert finalized.fit_diagnostics is not None
+    assert finalized.confidence is not None
+    assert finalized.fit_diagnostics.point_count == 4
 
 
 def test_manager_does_not_fit_during_collection():
@@ -68,7 +70,12 @@ def test_trajectory_panel_renders_one_finalized_arc():
         SparseBallDetection(2, 66.6, 50.0, 45.0, 0.9),
         SparseBallDetection(3, 99.9, 70.0, 40.0, 0.9),
     ]
-    display.parabola_fit = fit_parabola(display.candidate_points)
+    result = fit_weighted_parabola(display.candidate_points)
+    assert result is not None
+    display.parabola_fit, display.fit_diagnostics = result
+    from swishsync_cv.tracking.confidence import score_shot_confidence
+
+    display.confidence = score_shot_confidence(display)
 
     panel = render_trajectory_panel(
         frame_size=(160, 120),

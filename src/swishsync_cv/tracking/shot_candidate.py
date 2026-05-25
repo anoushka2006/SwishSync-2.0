@@ -26,6 +26,7 @@ class ShotCandidateManager:
         self.finalized_shots: list[ShotCandidate] = []
         self._pre_shot_buffer: list[SparseBallDetection] = []
         self._frames_since_point = 0
+        self._interpolated_ignored_count = 0
 
     @property
     def lifecycle_state(self) -> ShotLifecycleState:
@@ -58,13 +59,16 @@ class ShotCandidateManager:
             self._try_start_collection()
             return None
 
-        self.active.candidate_points.append(point)
         self._frames_since_point = 0
-        logger.info(
-            "point added frame=%s total=%s",
-            frame_index,
-            len(self.active.candidate_points),
-        )
+        if point.interpolated:
+            self._interpolated_ignored_count += 1
+        else:
+            self.active.candidate_points.append(point)
+            logger.info(
+                "point added frame=%s total=%s",
+                frame_index,
+                len(self.active.candidate_points),
+            )
 
         if self._should_end_collection(point, hoop_lock):
             return self._finalize_active()
@@ -80,11 +84,19 @@ class ShotCandidateManager:
             return
 
         seed_points = self._pre_shot_buffer[-self.config.min_points_to_start :]
+        measured_seeds = [point for point in seed_points if not point.interpolated]
+        self._interpolated_ignored_count = sum(
+            1 for point in seed_points if point.interpolated
+        )
         self.active = ShotCandidate(
-            start_frame=seed_points[0].frame_index,
+            start_frame=(
+                measured_seeds[0].frame_index
+                if measured_seeds
+                else seed_points[0].frame_index
+            ),
             state="collecting_shot",
         )
-        self.active.candidate_points.extend(seed_points)
+        self.active.candidate_points.extend(measured_seeds)
         self._frames_since_point = 0
         self._pre_shot_buffer.clear()
         logger.info(
@@ -131,7 +143,13 @@ class ShotCandidateManager:
         if apex_index <= 0 or apex_index >= len(points) - 1:
             return False
 
-        previous = points[-1]
+        if points[-1].frame_index == point.frame_index:
+            if len(points) < 2:
+                return False
+            previous = points[-2]
+        else:
+            previous = points[-1]
+
         dt = max(point.frame_index - previous.frame_index, 1)
         if (point.y - previous.y) / dt <= 0.5:
             return False
@@ -163,9 +181,15 @@ class ShotCandidateManager:
             return None
 
         self.active.end_frame = self.active.candidate_points[-1].frame_index
-        finalized = finalize_shot(self.active, self.config)
+        ignored = self._interpolated_ignored_count
+        finalized = finalize_shot(
+            self.active,
+            self.config,
+            interpolated_ignored_count=ignored,
+        )
         self.active = None
         self._frames_since_point = 0
+        self._interpolated_ignored_count = 0
         logger.info("candidate reset")
 
         if finalized.parabola_fit is None:

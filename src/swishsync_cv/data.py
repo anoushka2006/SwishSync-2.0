@@ -105,7 +105,7 @@ class HoopLock:
 
 @dataclass(frozen=True)
 class ParabolaFit:
-    """Quadratic fit of validated shot points: y = a*x^2 + b*x + c."""
+    """Quadratic fit of shot points: y = a*x^2 + b*x + c."""
 
     coefficients: tuple[float, float, float]
     r_squared: float
@@ -113,16 +113,42 @@ class ParabolaFit:
     apex_y: float
     x_min: float
     x_max: float
+    weighted_r_squared: float = 0.0
+    weighted_residual_rmse: float = 0.0
 
     def evaluate_y(self, x: float) -> float:
         a, b, c = self.coefficients
         return a * x * x + b * x + c
 
-    def sample_arc(self, num_points: int = 64) -> list[tuple[float, float]]:
+    def sample_arc(self, num_points: int = 96) -> list[tuple[float, float]]:
         if num_points < 2:
             return []
         xs = np.linspace(self.x_min, self.x_max, num_points)
         return [(float(x), float(self.evaluate_y(x))) for x in xs]
+
+
+@dataclass(frozen=True)
+class PointDiagnostic:
+    """Per-point fit diagnostic used for debugging trajectory quality."""
+
+    frame_index: int
+    x: float
+    y: float
+    confidence: float
+    fitting_weight: float
+    residual_px: float
+    is_outlier: bool
+
+
+@dataclass(frozen=True)
+class FitDiagnostics:
+    """Aggregate diagnostics for a confidence-weighted parabola fit."""
+
+    point_count: int
+    average_detection_confidence: float
+    weighted_residual_rmse: float
+    outlier_count: int
+    points: tuple[PointDiagnostic, ...]
 
 
 @dataclass
@@ -150,6 +176,7 @@ class ShotCandidate:
     candidate_points: list[SparseBallDetection] = field(default_factory=list)
     validated_points: list[SparseBallDetection] = field(default_factory=list)
     parabola_fit: ParabolaFit | None = None
+    fit_diagnostics: FitDiagnostics | None = None
     confidence: ConfidenceScores | None = None
     state: ShotLifecycleState = "collecting_shot"
     post_rim_frames_remaining: int = 0
