@@ -60,6 +60,10 @@ class HoopLockConfig:
     min_aspect_ratio: float = 0.6
     max_aspect_ratio: float = 6.0
     upper_frame_ratio: float = 0.85
+    manual_bbox_xywh: tuple[float, float, float, float] | None = None
+    select_hoop_on_first_frame: bool = False
+    select_hoop_if_unlocked: bool = False
+    rim_anchor_weight: float = 2.0
 
 
 @dataclass(frozen=True)
@@ -75,6 +79,12 @@ class ShotCandidateConfig:
     post_rim_extension_frames: int = 12
     max_idle_frames: int = 8
     min_validated_points_for_fit: int = 4
+    min_measured_points_for_fit: int = 5
+    reacquisition_gap_frames: int = 15
+    horizontal_jump_end_px: float = 60.0
+    post_finalize_cooldown_frames: int = 25
+    floor_below_rim_margin_px: float = 100.0
+    rim_anchor_rmse_regression_ratio: float = 1.15
 
 
 @dataclass(frozen=True)

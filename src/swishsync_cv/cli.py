@@ -74,7 +74,30 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         help="Save one debug frame every N frames when --save-debug-frames is set.",
     )
+    parser.add_argument(
+        "--hoop-bbox",
+        type=str,
+        help="Manual hoop bbox as x,y,w,h in pixels. Locks hoop immediately.",
+    )
+    parser.add_argument(
+        "--select-hoop-on-first-frame",
+        action="store_true",
+        help="Prompt to draw a hoop bbox on the first frame when no manual bbox is set.",
+    )
+    parser.add_argument(
+        "--select-hoop-if-unlocked",
+        action="store_true",
+        help="Prompt to draw a hoop bbox if automatic hoop lock fails during acquisition.",
+    )
     return parser
+
+
+def _parse_manual_hoop_bbox(value: str | None) -> tuple[float, float, float, float] | None:
+    if value is None:
+        return None
+    from swishsync_cv.tracking.hoop_geometry import parse_hoop_bbox_arg
+
+    return parse_hoop_bbox_arg(value)
 
 
 def main() -> None:
@@ -93,7 +116,11 @@ def main() -> None:
             detection_stride=args.detection_stride,
             min_confidence=args.confidence,
         ),
-        hoop_lock=HoopLockConfig(),
+        hoop_lock=HoopLockConfig(
+            manual_bbox_xywh=_parse_manual_hoop_bbox(args.hoop_bbox),
+            select_hoop_on_first_frame=args.select_hoop_on_first_frame,
+            select_hoop_if_unlocked=args.select_hoop_if_unlocked,
+        ),
         shot_candidate=ShotCandidateConfig(),
         video_output=VideoOutputConfig(
             dual_pane=not args.no_dual_pane,

@@ -13,7 +13,9 @@ class SparseBallDetectionBuffer:
         self.config = config
         self.detections: list[SparseBallDetection] = []
 
-    def should_detect(self, frame_index: int) -> bool:
+    def should_detect(self, frame_index: int, *, dense: bool = False) -> bool:
+        if dense:
+            return True
         stride = max(1, self.config.detection_stride)
         return frame_index % stride == 0
 

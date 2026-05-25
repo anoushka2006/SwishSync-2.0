@@ -10,6 +10,7 @@ import numpy as np
 from swishsync_cv.config import HoopLockConfig
 from swishsync_cv.data import DetectionRecord, HoopLock
 from swishsync_cv.detection.hoop_detector import HoopCandidate, HybridHoopDetector
+from swishsync_cv.tracking.hoop_geometry import bbox_xywh_to_xyxy, hoop_center_from_bbox
 
 HoopPhase = Literal["acquisition", "locked", "revalidation"]
 
@@ -37,6 +38,38 @@ class HoopLockTracker:
         self._recent_scores: list[float] = []
         self._missed_detection_frames = 0
         self._last_detection_frame = -1
+        self._manual_lock = False
+
+    @property
+    def is_manual_lock(self) -> bool:
+        return self._manual_lock
+
+    def lock_manual_bbox(
+        self,
+        frame_index: int,
+        x: float,
+        y: float,
+        width: float,
+        height: float,
+    ) -> HoopLock:
+        """Lock hoop position from a user-provided bbox in x,y,w,h form."""
+
+        bbox = bbox_xywh_to_xyxy(x, y, width, height)
+        center_x, center_y = hoop_center_from_bbox(bbox)
+        self._lock = HoopLock(
+            center_x=center_x,
+            center_y=center_y,
+            bbox_xyxy=bbox,
+            confidence=1.0,
+            locked_at_frame=frame_index,
+            is_locked=True,
+            detector_confidence=1.0,
+            color_score=1.0,
+        )
+        self._phase = "locked"
+        self._manual_lock = True
+        self._observations.clear()
+        return self._lock
 
     @property
     def is_locked(self) -> bool:
@@ -63,6 +96,9 @@ class HoopLockTracker:
         frame: np.ndarray,
         yolo_hoop_detections: list[DetectionRecord] | None = None,
     ) -> HoopLock | None:
+        if self._manual_lock:
+            return self._lock
+
         detections = yolo_hoop_detections or []
         candidates = self._detector.detect(frame, detections)
         best = candidates[0] if candidates else None

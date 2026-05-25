@@ -14,6 +14,7 @@ from swishsync_cv.data import DetectionRecord, FrameDetections, SparseBallDetect
 from swishsync_cv.detection import YoloObjectDetector
 from swishsync_cv.io import VideoReader, VideoWriter
 from swishsync_cv.tracking.hoop_lock import HoopLockTracker
+from swishsync_cv.tracking.hoop_selection import select_hoop_bbox_interactive
 from swishsync_cv.tracking.shot_candidate import ShotCandidateManager
 from swishsync_cv.tracking.sparse_detection import SparseBallDetectionBuffer
 from swishsync_cv.utils import (
@@ -69,6 +70,17 @@ def run_pipeline(
     sparse_buffer = SparseBallDetectionBuffer(config.sparse_detection)
     hoop_tracker = HoopLockTracker(config.hoop_lock)
 
+    if config.hoop_lock.manual_bbox_xywh is not None:
+        x, y, width, height = config.hoop_lock.manual_bbox_xywh
+        hoop_tracker.lock_manual_bbox(0, x, y, width, height)
+        logger.info(
+            "manual hoop lock bbox=(%.1f, %.1f, %.1f, %.1f)",
+            x,
+            y,
+            width,
+            height,
+        )
+
     frame_records: list[FrameDetections] = []
     flat_detections: list[DetectionRecord] = []
     sparse_detections: list[SparseBallDetection] = []
@@ -81,11 +93,14 @@ def run_pipeline(
         shot_manager = ShotCandidateManager(
             config=config.shot_candidate,
             frame_height=reader.metadata.height,
+            hoop_lock_config=config.hoop_lock,
         )
         output_frame_size = _output_frame_size(
             reader.metadata.frame_size,
             dual_pane=config.video_output.dual_pane,
         )
+        first_frame_image = None
+        hoop_selection_attempted = config.hoop_lock.manual_bbox_xywh is not None
 
         with VideoWriter(
             output_path=config.output_video_path,
@@ -94,7 +109,22 @@ def run_pipeline(
             codec=config.video_output.codec,
         ) as writer:
             for packet in reader:
-                detection_ran = sparse_buffer.should_detect(packet.index)
+                if first_frame_image is None:
+                    first_frame_image = packet.image.copy()
+
+                if (
+                    config.hoop_lock.select_hoop_on_first_frame
+                    and packet.index == 0
+                    and not hoop_tracker.is_locked
+                ):
+                    selected = select_hoop_bbox_interactive(first_frame_image)
+                    if selected is not None:
+                        hoop_tracker.lock_manual_bbox(0, *selected)
+                        logger.info("interactive hoop lock applied from first frame")
+                    hoop_selection_attempted = True
+
+                collecting = shot_manager.lifecycle_state == "collecting_shot"
+                detection_ran = sparse_buffer.should_detect(packet.index, dense=collecting)
                 detections: list[DetectionRecord] = []
 
                 if detection_ran:
@@ -117,6 +147,11 @@ def run_pipeline(
                         timestamp_ms=packet.timestamp_ms,
                         detections=detections,
                     )
+                    if sparse_point is None and collecting:
+                        sparse_point = sparse_buffer.interpolate_at(
+                            frame_index=packet.index,
+                            timestamp_ms=packet.timestamp_ms,
+                        )
                 else:
                     sparse_point = sparse_buffer.interpolate_at(
                         frame_index=packet.index,
@@ -134,6 +169,22 @@ def run_pipeline(
                         frame=packet.image,
                         yolo_hoop_detections=yolo_hoops,
                     )
+
+                if (
+                    config.hoop_lock.select_hoop_if_unlocked
+                    and not hoop_selection_attempted
+                    and not hoop_tracker.is_locked
+                    and packet.index >= config.hoop_lock.acquisition_frames - 1
+                    and first_frame_image is not None
+                ):
+                    selected = select_hoop_bbox_interactive(
+                        first_frame_image,
+                        window_title="Select hoop (auto-detection failed)",
+                    )
+                    if selected is not None:
+                        hoop_tracker.lock_manual_bbox(0, *selected)
+                        logger.info("interactive hoop lock applied after failed acquisition")
+                    hoop_selection_attempted = True
 
                 if sparse_point is not None and not sparse_point.interpolated:
                     sparse_detections.append(sparse_point)

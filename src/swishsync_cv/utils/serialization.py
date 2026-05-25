@@ -130,6 +130,8 @@ def point_diagnostic_to_dict(point: PointDiagnostic) -> dict[str, object]:
         "fitting_weight": point.fitting_weight,
         "residual_px": point.residual_px,
         "is_outlier": point.is_outlier,
+        "used_in_fit": point.used_in_fit,
+        "excluded_from_fit": point.excluded_from_fit,
     }
 
 
@@ -139,6 +141,8 @@ def fit_diagnostics_to_dict(diagnostics: FitDiagnostics) -> dict[str, object]:
         "average_detection_confidence": diagnostics.average_detection_confidence,
         "weighted_residual_rmse": diagnostics.weighted_residual_rmse,
         "outlier_count": diagnostics.outlier_count,
+        "initial_weighted_residual_rmse": diagnostics.initial_weighted_residual_rmse,
+        "fit_point_count": diagnostics.fit_point_count,
         "points": [point_diagnostic_to_dict(point) for point in diagnostics.points],
     }
 
@@ -148,6 +152,7 @@ def shot_candidate_to_dict(candidate: ShotCandidate) -> dict[str, object]:
         "start_frame": candidate.start_frame,
         "end_frame": candidate.end_frame,
         "state": candidate.state,
+        "insufficient_points_for_fit": candidate.insufficient_points_for_fit,
         "candidate_points": [
             sparse_detection_to_dict(point) for point in candidate.candidate_points
         ],
@@ -156,6 +161,9 @@ def shot_candidate_to_dict(candidate: ShotCandidate) -> dict[str, object]:
         ],
         "validated_points": [
             sparse_detection_to_dict(point) for point in candidate.validated_points
+        ],
+        "excluded_debug_points": [
+            sparse_detection_to_dict(point) for point in candidate.excluded_debug_points
         ],
         "parabola_fit": (
             parabola_fit_to_dict(candidate.parabola_fit)

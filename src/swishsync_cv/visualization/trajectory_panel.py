@@ -39,16 +39,33 @@ def render_trajectory_panel(
     if hoop_lock is not None and hoop_lock.is_locked:
         center = (int(round(hoop_lock.center_x)), int(round(hoop_lock.center_y)))
         cv2.circle(panel, center, 10, HOOP_COLOR, 2)
+        rim = (int(round(hoop_lock.rim_center_x)), int(round(hoop_lock.rim_center_y)))
+        cv2.drawMarker(
+            panel,
+            rim,
+            HOOP_COLOR,
+            markerType=cv2.MARKER_TILTED_CROSS,
+            markerSize=12,
+            thickness=2,
+        )
 
     if collecting_shot is not None and collecting_shot.state == "collecting_shot":
         _draw_collection_preview(panel, collecting_shot)
 
-    if display_shot is not None and display_shot.parabola_fit is not None:
+    if display_shot is not None and display_shot.insufficient_points_for_fit:
+        _draw_insufficient_shot(panel, display_shot)
+    elif display_shot is not None and display_shot.parabola_fit is not None:
         _draw_finalized_shot(panel, display_shot)
 
     if (
         collecting_shot is None
-        and (display_shot is None or display_shot.parabola_fit is None)
+        and (
+            display_shot is None
+            or (
+                display_shot.parabola_fit is None
+                and not display_shot.insufficient_points_for_fit
+            )
+        )
     ):
         cv2.putText(
             panel,
@@ -120,6 +137,39 @@ def _draw_collection_preview(panel: np.ndarray, collecting_shot: ShotCandidate) 
     )
 
 
+def _draw_insufficient_shot(panel: np.ndarray, display_shot: ShotCandidate) -> None:
+    pixel_points = [
+        (int(round(point.x)), int(round(point.y)), point.confidence)
+        for point in display_shot.candidate_points
+    ]
+    for x, y, confidence in pixel_points:
+        _draw_confidence_point(panel, x, y, confidence, is_outlier=False)
+    if len(pixel_points) >= 2:
+        for (x1, y1, _), (x2, y2, _) in zip(pixel_points, pixel_points[1:]):
+            _draw_dotted_line(panel, (x1, y1), (x2, y2), COLLECTING_PATH_COLOR)
+
+    cv2.putText(
+        panel,
+        "INSUFFICIENT POINTS FOR FIT",
+        (16, 100),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.55,
+        OUTLIER_COLOR,
+        2,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        panel,
+        f"measured={len(display_shot.candidate_points)} need=5",
+        (16, 122),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.45,
+        TEXT_COLOR,
+        1,
+        cv2.LINE_AA,
+    )
+
+
 def _draw_finalized_shot(panel: np.ndarray, display_shot: ShotCandidate) -> None:
     fit = display_shot.parabola_fit
     if fit is None:
@@ -140,12 +190,22 @@ def _draw_finalized_shot(panel: np.ndarray, display_shot: ShotCandidate) -> None
     diagnostics = display_shot.fit_diagnostics
     if diagnostics is not None:
         for point in diagnostics.points:
+            if point.frame_index < 0:
+                cv2.drawMarker(
+                    panel,
+                    (int(round(point.x)), int(round(point.y))),
+                    HOOP_COLOR,
+                    markerType=cv2.MARKER_TILTED_CROSS,
+                    markerSize=12,
+                    thickness=2,
+                )
+                continue
             _draw_confidence_point(
                 panel,
                 int(round(point.x)),
                 int(round(point.y)),
                 point.confidence,
-                is_outlier=point.is_outlier,
+                is_outlier=point.is_outlier or point.excluded_from_fit,
             )
     else:
         for point in display_shot.candidate_points:
@@ -156,6 +216,15 @@ def _draw_finalized_shot(panel: np.ndarray, display_shot: ShotCandidate) -> None
                 point.confidence,
                 is_outlier=False,
             )
+
+    for point in display_shot.excluded_debug_points:
+        _draw_confidence_point(
+            panel,
+            int(round(point.x)),
+            int(round(point.y)),
+            point.confidence,
+            is_outlier=True,
+        )
 
     apex = (int(round(fit.apex_x)), int(round(fit.apex_y)))
     cv2.circle(panel, apex, 6, APEX_COLOR, -1)

@@ -10,6 +10,8 @@ import numpy as np
 
 DetectionCategory = Literal["basketball", "hoop"]
 ShotLifecycleState = Literal["idle", "collecting_shot", "shot_finalized"]
+ShotFinalizeReason = Literal["post_rim", "horizontal_jump", "idle", "end_of_video", "unknown"]
+ShotMotionDirection = Literal["ascending", "descending", "unknown"]
 
 
 @dataclass(frozen=True)
@@ -102,6 +104,16 @@ class HoopLock:
     detector_confidence: float = 0.0
     color_score: float = 0.0
 
+    @property
+    def rim_center_x(self) -> float:
+        x1, _y1, x2, y2 = self.bbox_xyxy
+        return (x1 + x2) / 2.0
+
+    @property
+    def rim_center_y(self) -> float:
+        _x1, _y1, _x2, y2 = self.bbox_xyxy
+        return y2
+
 
 @dataclass(frozen=True)
 class ParabolaFit:
@@ -138,6 +150,8 @@ class PointDiagnostic:
     fitting_weight: float
     residual_px: float
     is_outlier: bool
+    used_in_fit: bool = True
+    excluded_from_fit: bool = False
 
 
 @dataclass(frozen=True)
@@ -149,6 +163,8 @@ class FitDiagnostics:
     weighted_residual_rmse: float
     outlier_count: int
     points: tuple[PointDiagnostic, ...]
+    initial_weighted_residual_rmse: float | None = None
+    fit_point_count: int | None = None
 
 
 @dataclass
@@ -180,6 +196,9 @@ class ShotCandidate:
     confidence: ConfidenceScores | None = None
     state: ShotLifecycleState = "collecting_shot"
     post_rim_frames_remaining: int = 0
+    post_rim_started: bool = False
+    insufficient_points_for_fit: bool = False
+    excluded_debug_points: list[SparseBallDetection] = field(default_factory=list)
 
     @property
     def raw_points(self) -> list[SparseBallDetection]:

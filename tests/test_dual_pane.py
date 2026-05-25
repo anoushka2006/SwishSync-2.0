@@ -8,15 +8,20 @@ from swishsync_cv.tracking.shot_finalization import finalize_shot
 from swishsync_cv.visualization.trajectory_panel import compose_dual_pane, render_trajectory_panel
 
 
-def test_finalize_shot_fits_once_from_buffered_points():
-    candidate = ShotCandidate(start_frame=0, state="collecting_shot")
-    candidate.candidate_points = [
+def _five_arc_points() -> list[SparseBallDetection]:
+    return [
         SparseBallDetection(0, 0.0, 10.0, 80.0, 0.9),
         SparseBallDetection(1, 33.3, 30.0, 60.0, 0.9),
         SparseBallDetection(2, 66.6, 50.0, 45.0, 0.9),
         SparseBallDetection(3, 99.9, 70.0, 40.0, 0.9),
+        SparseBallDetection(4, 133.2, 90.0, 42.0, 0.9),
     ]
-    candidate.end_frame = 3
+
+
+def test_finalize_shot_fits_once_from_buffered_points():
+    candidate = ShotCandidate(start_frame=0, state="collecting_shot")
+    candidate.candidate_points = _five_arc_points()
+    candidate.end_frame = 4
 
     finalized = finalize_shot(candidate, ShotCandidateConfig())
 
@@ -24,7 +29,7 @@ def test_finalize_shot_fits_once_from_buffered_points():
     assert finalized.parabola_fit is not None
     assert finalized.fit_diagnostics is not None
     assert finalized.confidence is not None
-    assert finalized.fit_diagnostics.point_count == 4
+    assert finalized.fit_diagnostics.point_count == 5
 
 
 def test_manager_does_not_fit_during_collection():
@@ -46,12 +51,7 @@ def test_manager_does_not_fit_during_collection():
 def test_manager_resets_after_finalization():
     manager = ShotCandidateManager(ShotCandidateConfig(), frame_height=100)
     manager.active = ShotCandidate(start_frame=0, state="collecting_shot")
-    manager.active.candidate_points = [
-        SparseBallDetection(0, 0.0, 10.0, 80.0, 0.9),
-        SparseBallDetection(1, 33.3, 30.0, 60.0, 0.9),
-        SparseBallDetection(2, 66.6, 50.0, 45.0, 0.9),
-        SparseBallDetection(3, 99.9, 70.0, 40.0, 0.9),
-    ]
+    manager.active.candidate_points = _five_arc_points()
 
     finalized = manager.finalize()
 
@@ -64,12 +64,7 @@ def test_manager_resets_after_finalization():
 
 def test_trajectory_panel_renders_one_finalized_arc():
     display = ShotCandidate(start_frame=0, end_frame=3, state="shot_finalized")
-    display.candidate_points = [
-        SparseBallDetection(0, 0.0, 10.0, 80.0, 0.9),
-        SparseBallDetection(1, 33.3, 30.0, 60.0, 0.9),
-        SparseBallDetection(2, 66.6, 50.0, 45.0, 0.9),
-        SparseBallDetection(3, 99.9, 70.0, 40.0, 0.9),
-    ]
+    display.candidate_points = _five_arc_points()
     result = fit_weighted_parabola(display.candidate_points)
     assert result is not None
     display.parabola_fit, display.fit_diagnostics = result

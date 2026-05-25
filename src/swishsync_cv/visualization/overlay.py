@@ -42,6 +42,8 @@ def render_debug_panel(
         _draw_sparse_detection(panel, sparse_point)
     if collecting_shot is not None and collecting_shot.state == "collecting_shot":
         _draw_collection_preview(panel, collecting_shot)
+    elif display_shot is not None and display_shot.insufficient_points_for_fit:
+        _draw_insufficient_fit(panel, display_shot)
     elif display_shot is not None and display_shot.parabola_fit is not None:
         _draw_finalized_arc(panel, display_shot)
     _draw_debug_hud(
@@ -109,6 +111,8 @@ def _draw_hoop_lock(
         thickness=2,
         line_type=cv2.LINE_AA,
     )
+    rim = (int(round(hoop_lock.rim_center_x)), int(round(hoop_lock.rim_center_y)))
+    cv2.circle(frame, rim, 6, color, 2)
     status = "HOOP LOCKED" if hoop_lock.is_locked else hoop_phase.upper()
     cv2.putText(
         frame,
@@ -134,9 +138,23 @@ def _draw_hoop_lock(
 
 
 def _draw_collection_preview(frame: np.ndarray, collecting_shot: ShotCandidate) -> None:
+    _draw_measured_point_track(frame, collecting_shot)
+    cv2.putText(
+        frame,
+        "COLLECTING (no fit)",
+        (16, 100),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.5,
+        TEXT_COLOR,
+        1,
+        cv2.LINE_AA,
+    )
+
+
+def _draw_measured_point_track(frame: np.ndarray, shot: ShotCandidate) -> None:
     points = [
         (int(round(point.x)), int(round(point.y)))
-        for point in collecting_shot.candidate_points
+        for point in shot.candidate_points
     ]
     for point in points:
         cv2.circle(frame, point, 4, COLLECTING_POINT_COLOR, -1)
@@ -163,6 +181,20 @@ def _draw_dotted_line(
         p0 = (int(x1 + (x2 - x1) * t0), int(y1 + (y2 - y1) * t0))
         p1 = (int(x1 + (x2 - x1) * t1), int(y1 + (y2 - y1) * t1))
         cv2.line(frame, p0, p1, color, 1, cv2.LINE_AA)
+
+
+def _draw_insufficient_fit(frame: np.ndarray, display_shot: ShotCandidate) -> None:
+    _draw_measured_point_track(frame, display_shot)
+    cv2.putText(
+        frame,
+        "INSUFFICIENT POINTS FOR FIT",
+        (16, 100),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.55,
+        (80, 80, 255),
+        2,
+        cv2.LINE_AA,
+    )
 
 
 def _draw_finalized_arc(frame: np.ndarray, display_shot: ShotCandidate) -> None:
