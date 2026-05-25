@@ -1,4 +1,4 @@
-"""Serialization helpers for detection and trajectory debugging artifacts."""
+"""Serialization helpers for detection and shot debugging artifacts."""
 
 from __future__ import annotations
 
@@ -6,7 +6,16 @@ import csv
 import json
 from pathlib import Path
 
-from swishsync_cv.data import DetectionRecord, FrameDetections, TrajectoryPoint
+from swishsync_cv.data import (
+    CompletedShot,
+    DetectionRecord,
+    FrameDetections,
+    ParabolaFit,
+    ShotAxis,
+    ShotCandidate,
+    SparseBallDetection,
+    TrajectoryPoint,
+)
 
 
 def detection_to_dict(detection: DetectionRecord) -> dict[str, object]:
@@ -80,4 +89,110 @@ def write_detections_csv(path: Path, detections: list[DetectionRecord]) -> None:
 def write_trajectory_json(path: Path, trajectory: list[TrajectoryPoint]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = [trajectory_point_to_dict(point) for point in trajectory]
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def sparse_detection_to_dict(point: SparseBallDetection) -> dict[str, object]:
+    return {
+        "frame_index": point.frame_index,
+        "timestamp_ms": point.timestamp_ms,
+        "x": point.x,
+        "y": point.y,
+        "confidence": point.confidence,
+        "interpolated": point.interpolated,
+    }
+
+
+def parabola_fit_to_dict(fit: ParabolaFit) -> dict[str, object]:
+    a, b, c = fit.coefficients
+    return {
+        "a": a,
+        "b": b,
+        "c": c,
+        "r_squared": fit.r_squared,
+        "apex_x": fit.apex_x,
+        "apex_y": fit.apex_y,
+        "x_min": fit.x_min,
+        "x_max": fit.x_max,
+    }
+
+
+def shot_candidate_to_dict(candidate: ShotCandidate) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "start_frame": candidate.start_frame,
+        "end_frame": candidate.end_frame,
+        "state": candidate.state,
+        "candidate_points": [
+            sparse_detection_to_dict(point) for point in candidate.candidate_points
+        ],
+        "raw_points": [
+            sparse_detection_to_dict(point) for point in candidate.candidate_points
+        ],
+        "validated_points": [
+            sparse_detection_to_dict(point) for point in candidate.validated_points
+        ],
+        "parabola_fit": (
+            parabola_fit_to_dict(candidate.parabola_fit)
+            if candidate.parabola_fit is not None
+            else None
+        ),
+        "confidence": (
+            {
+                "detection_confidence": candidate.confidence.detection_confidence,
+                "trajectory_confidence": candidate.confidence.trajectory_confidence,
+                "overall_confidence": candidate.confidence.overall_confidence,
+            }
+            if candidate.confidence is not None
+            else None
+        ),
+    }
+    return payload
+
+
+def shot_axis_to_dict(axis: ShotAxis) -> dict[str, object]:
+    return {
+        "shooter_x": axis.shooter_x,
+        "shooter_y": axis.shooter_y,
+        "hoop_x": axis.hoop_x,
+        "hoop_y": axis.hoop_y,
+        "axis_dx": axis.axis_dx,
+        "axis_dy": axis.axis_dy,
+        "scale": axis.scale,
+    }
+
+
+def completed_shot_to_dict(shot: CompletedShot) -> dict[str, object]:
+    return {
+        "shot_id": shot.shot_id,
+        "start_frame": shot.start_frame,
+        "end_frame": shot.end_frame,
+        "timestamp_ms": shot.timestamp_ms,
+        "arc_points": [{"x": x, "y": y} for x, y in shot.arc_points],
+        "normalized_arc_points": [
+            {"x": x, "y": y} for x, y in shot.normalized_arc_points
+        ],
+        "normalized_apex": {
+            "x": shot.normalized_apex[0],
+            "y": shot.normalized_apex[1],
+        },
+        "shot_axis": shot_axis_to_dict(shot.shot_axis),
+        "confidence": {
+            "detection_confidence": shot.confidence.detection_confidence,
+            "trajectory_confidence": shot.confidence.trajectory_confidence,
+            "overall_confidence": shot.confidence.overall_confidence,
+        },
+        "parabola_r_squared": shot.parabola_r_squared,
+        "outcome": shot.outcome,
+    }
+
+
+def write_finalized_shots_json(path: Path, shots: list[ShotCandidate]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = [shot_candidate_to_dict(shot) for shot in shots]
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def write_shots_json(path: Path, shots: list[CompletedShot]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = [completed_shot_to_dict(shot) for shot in shots]
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")

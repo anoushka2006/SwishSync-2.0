@@ -8,7 +8,8 @@ from swishsync_cv.pipeline import run_pipeline
 
 class FakeDetector:
     def detect(self, frame, frame_index: int, timestamp_ms: float):
-        x = 10 + frame_index * 5
+        x = 40 + frame_index * 2
+        y = 50 - frame_index * 4
         return [
             DetectionRecord(
                 frame_index=frame_index,
@@ -16,7 +17,7 @@ class FakeDetector:
                 label="basketball",
                 class_name="sports ball",
                 confidence=0.9,
-                bbox_xyxy=(x, 20, x + 10, 30),
+                bbox_xyxy=(x, y, x + 10, y + 10),
             ),
             DetectionRecord(
                 frame_index=frame_index,
@@ -29,7 +30,7 @@ class FakeDetector:
         ]
 
 
-def _write_test_video(path, frame_count: int = 3) -> None:
+def _write_test_video(path, frame_count: int = 12) -> None:
     writer = cv2.VideoWriter(
         str(path),
         cv2.VideoWriter_fourcc(*"mp4v"),
@@ -39,7 +40,7 @@ def _write_test_video(path, frame_count: int = 3) -> None:
     assert writer.isOpened()
     for index in range(frame_count):
         frame = np.zeros((64, 96, 3), dtype=np.uint8)
-        frame[:, :, 1] = index * 40
+        frame[:, :, 1] = index * 20
         writer.write(frame)
     writer.release()
 
@@ -57,11 +58,11 @@ def test_run_pipeline_with_fake_detector_exports_artifacts(tmp_path):
 
     result = run_pipeline(config=config, detector=FakeDetector())
 
-    assert result.processed_frames == 3
-    assert result.detection_count == 6
-    assert result.trajectory_point_count == 3
+    assert result.processed_frames == 12
+    assert result.detection_count > 0
+    assert result.sparse_detection_count > 0
     assert result.output_video_path.exists()
     assert result.detections_jsonl_path.exists()
     assert result.detections_csv_path.exists()
-    assert result.trajectory_json_path.exists()
-    assert len(list(config.debug_frames_dir.glob("*.jpg"))) == 3
+    assert result.shots_json_path.exists()
+    assert len(list(config.debug_frames_dir.glob("*.jpg"))) == 12

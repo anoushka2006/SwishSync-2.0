@@ -5,15 +5,22 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from swishsync_cv.config import DetectionConfig, PipelineConfig, VideoOutputConfig
+from swishsync_cv.config import (
+    DetectionConfig,
+    HoopLockConfig,
+    PipelineConfig,
+    ShotCandidateConfig,
+    SparseDetectionConfig,
+    VideoOutputConfig,
+)
 from swishsync_cv.pipeline import run_pipeline
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Run SwishSync's foundational video -> detection -> trajectory "
-            "visualization pipeline."
+            "Run SwishSync's sparse detection -> shot reconstruction -> "
+            "dual-pane visualization pipeline."
         )
     )
     parser.add_argument("--input", required=True, type=Path, help="Local input video path.")
@@ -46,6 +53,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="YOLO non-max suppression IOU threshold.",
     )
     parser.add_argument(
+        "--detection-stride",
+        default=3,
+        type=int,
+        help="Run YOLO every N frames (sparse detection).",
+    )
+    parser.add_argument(
+        "--no-dual-pane",
+        action="store_true",
+        help="Disable dual-pane output and write debug panel only.",
+    )
+    parser.add_argument(
         "--save-debug-frames",
         action="store_true",
         help="Save periodic annotated JPEG frames for inspection.",
@@ -71,7 +89,14 @@ def main() -> None:
             iou_threshold=args.iou,
             device="cpu",
         ),
+        sparse_detection=SparseDetectionConfig(
+            detection_stride=args.detection_stride,
+            min_confidence=args.confidence,
+        ),
+        hoop_lock=HoopLockConfig(),
+        shot_candidate=ShotCandidateConfig(),
         video_output=VideoOutputConfig(
+            dual_pane=not args.no_dual_pane,
             save_debug_frames=args.save_debug_frames,
             debug_frame_stride=args.debug_frame_stride,
         ),
@@ -80,11 +105,12 @@ def main() -> None:
     print("SwishSync CV pipeline complete")
     print(f"processed_frames={result.processed_frames}")
     print(f"detection_count={result.detection_count}")
-    print(f"trajectory_point_count={result.trajectory_point_count}")
+    print(f"sparse_detection_count={result.sparse_detection_count}")
+    print(f"shot_count={result.shot_count}")
     print(f"output_video={result.output_video_path}")
     print(f"detections_jsonl={result.detections_jsonl_path}")
     print(f"detections_csv={result.detections_csv_path}")
-    print(f"trajectory_json={result.trajectory_json_path}")
+    print(f"shots_json={result.shots_json_path}")
 
 
 if __name__ == "__main__":
