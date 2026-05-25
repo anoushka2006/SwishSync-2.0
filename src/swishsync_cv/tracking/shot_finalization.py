@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from swishsync_cv.config import HoopLockConfig, ShotCandidateConfig
+from swishsync_cv.config import HoopLockConfig, ShotCandidateConfig, ShotStoryConfig
 from swishsync_cv.data import HoopLock, ShotCandidate
 from swishsync_cv.tracking.arc_render import compute_arc_render_metadata
 from swishsync_cv.tracking.confidence import score_shot_confidence
@@ -12,6 +12,7 @@ from swishsync_cv.tracking.parabola import (
     fit_weighted_parabola_robust,
     select_flight_fit_points,
 )
+from swishsync_cv.tracking.shot_story import compute_shot_story
 
 logger = logging.getLogger("swishsync_cv.shot")
 
@@ -22,6 +23,7 @@ def finalize_shot(
     interpolated_ignored_count: int = 0,
     hoop_lock: HoopLock | None = None,
     hoop_lock_config: HoopLockConfig | None = None,
+    story_config: ShotStoryConfig | None = None,
 ) -> ShotCandidate:
     """Freeze buffered points and fit one confidence-weighted parabola."""
 
@@ -147,6 +149,13 @@ def finalize_shot(
         logger.info("parabola fit skipped (not enough usable points)")
 
     candidate.state = "shot_finalized"
+    candidate.story = compute_shot_story(
+        candidate,
+        config,
+        hoop_lock,
+        fit_points if fit_points else list(candidate.candidate_points),
+        story_config,
+    )
     return candidate
 
 

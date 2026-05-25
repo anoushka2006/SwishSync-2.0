@@ -222,6 +222,21 @@ class ArcRenderMetadata:
     extended_segment_end: tuple[float, float] | None
 
 
+@dataclass(frozen=True)
+class ShotStoryMetadata:
+    """Render-only phase boundaries for shot lifecycle visualization."""
+
+    release_frame: int
+    release_xy: tuple[float, float]
+    flight_start_frame: int
+    flight_end_frame: int
+    post_shot_start_frame: int | None
+    pickup_frames: tuple[int, ...]
+    gap_predicted_frames: tuple[int, ...]
+    show_post_shot: bool
+    show_pickup: bool
+
+
 @dataclass
 class ShotCandidate:
     """Buffered shot attempt collected before single-pass reconstruction."""
@@ -231,6 +246,8 @@ class ShotCandidate:
     candidate_points: list[SparseBallDetection] = field(default_factory=list)
     continuity_points: list[SparseBallDetection] = field(default_factory=list)
     gap_predicted_frames: list[int] = field(default_factory=list)
+    pickup_points: list[SparseBallDetection] = field(default_factory=list)
+    post_shot_points: list[SparseBallDetection] = field(default_factory=list)
     validated_points: list[SparseBallDetection] = field(default_factory=list)
     parabola_fit: ParabolaFit | None = None
     fit_diagnostics: FitDiagnostics | None = None
@@ -243,6 +260,7 @@ class ShotCandidate:
     insufficient_points_for_fit: bool = False
     excluded_debug_points: list[SparseBallDetection] = field(default_factory=list)
     arc_render: ArcRenderMetadata | None = None
+    story: ShotStoryMetadata | None = None
 
     @property
     def raw_points(self) -> list[SparseBallDetection]:

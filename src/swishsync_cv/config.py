@@ -115,6 +115,16 @@ class AnalyticalViewConfig:
 
 
 @dataclass(frozen=True)
+class ShotStoryConfig:
+    """Render-only shot lifecycle visualization settings."""
+
+    pickup_max_horizontal_span_px: float = 200.0
+    pickup_min_points: int = 2
+    pickup_min_frame_span: int = 3
+    max_flight_diagnostic_dots: int = 12
+
+
+@dataclass(frozen=True)
 class VideoOutputConfig:
     """Video export and visual debugging settings."""
 
@@ -125,6 +135,9 @@ class VideoOutputConfig:
     debug_frame_stride: int = 30
     dual_pane: bool = True
     right_panel_background: tuple[int, int, int] = (24, 24, 28)
+    show_shot_history: bool = True
+    shot_story: ShotStoryConfig = field(default_factory=ShotStoryConfig)
+    analytical_view: AnalyticalViewConfig = field(default_factory=AnalyticalViewConfig)
 
 
 @dataclass(frozen=True)

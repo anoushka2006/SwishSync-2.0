@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from swishsync_cv.config import HoopLockConfig, ShotCandidateConfig
+from swishsync_cv.config import HoopLockConfig, ShotCandidateConfig, ShotStoryConfig
 from swishsync_cv.data import (
     HoopLock,
     ShotCandidate,
@@ -38,9 +38,11 @@ class ShotCandidateManager:
         config: ShotCandidateConfig,
         frame_height: int,
         hoop_lock_config: HoopLockConfig | None = None,
+        story_config: ShotStoryConfig | None = None,
     ) -> None:
         self.config = config
         self.hoop_lock_config = hoop_lock_config or HoopLockConfig()
+        self.story_config = story_config or ShotStoryConfig()
         self.frame_height = frame_height
         self.active: ShotCandidate | None = None
         self.display_shot: ShotCandidate | None = None
@@ -197,10 +199,20 @@ class ShotCandidateManager:
         self._interpolated_ignored_count = sum(
             1 for point in seed_points if point.interpolated
         )
+        release_frame = measured_seeds[0].frame_index
+        pickup_candidates = self._non_floor_measured(
+            self._pre_shot_buffer,
+            self._last_hoop_lock,
+        )
         self.active = ShotCandidate(
-            start_frame=measured_seeds[0].frame_index,
+            start_frame=release_frame,
             state="collecting_shot",
         )
+        self.active.pickup_points = [
+            point
+            for point in pickup_candidates
+            if point.frame_index < release_frame
+        ]
         self.active.candidate_points.extend(measured_seeds)
         self.active.continuity_points.extend(measured_seeds)
         self._frames_since_point = 0
@@ -463,6 +475,18 @@ class ShotCandidateManager:
 
         return False
 
+    def _collect_post_shot_points(self) -> list[SparseBallDetection]:
+        assert self.active is not None
+        merged: list[SparseBallDetection] = []
+        seen: set[int] = set()
+        for point in self.post_shot_debug_points + self.active.excluded_debug_points:
+            if point.frame_index in seen:
+                continue
+            merged.append(point)
+            seen.add(point.frame_index)
+        merged.sort(key=lambda item: item.frame_index)
+        return merged[: self.config.post_rim_measured_cap]
+
     def _finalize_active(self) -> ShotCandidate | None:
         if self.active is None:
             return None
@@ -478,16 +502,19 @@ class ShotCandidateManager:
         self._pending_finalize_reason = None
         last_motion = _infer_last_motion(self.active.candidate_points)
         ignored = self._interpolated_ignored_count
+        self.active.post_shot_points = self._collect_post_shot_points()
         finalized = finalize_shot(
             self.active,
             self.config,
             interpolated_ignored_count=ignored,
             hoop_lock=self._last_hoop_lock,
             hoop_lock_config=self.hoop_lock_config,
+            story_config=self.story_config,
         )
         self.active = None
         self._frames_since_point = 0
         self._interpolated_ignored_count = 0
+        self.post_shot_debug_points.clear()
         self._cooldown = FinalizeCooldownState(
             frame=finalized.end_frame or finalized.start_frame,
             reason=reason,

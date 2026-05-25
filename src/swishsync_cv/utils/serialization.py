@@ -16,6 +16,7 @@ from swishsync_cv.data import (
     PointDiagnostic,
     ShotAxis,
     ShotCandidate,
+    ShotStoryMetadata,
     SparseBallDetection,
     TrajectoryPoint,
     effective_point_source,
@@ -180,6 +181,20 @@ def arc_render_to_dict(metadata: ArcRenderMetadata) -> dict[str, object]:
     }
 
 
+def shot_story_to_dict(story: ShotStoryMetadata) -> dict[str, object]:
+    return {
+        "release_frame": story.release_frame,
+        "release_xy": {"x": story.release_xy[0], "y": story.release_xy[1]},
+        "flight_start_frame": story.flight_start_frame,
+        "flight_end_frame": story.flight_end_frame,
+        "post_shot_start_frame": story.post_shot_start_frame,
+        "pickup_frames": list(story.pickup_frames),
+        "gap_predicted_frames": list(story.gap_predicted_frames),
+        "show_post_shot": story.show_post_shot,
+        "show_pickup": story.show_pickup,
+    }
+
+
 def shot_candidate_to_dict(candidate: ShotCandidate) -> dict[str, object]:
     payload: dict[str, object] = {
         "start_frame": candidate.start_frame,
@@ -191,6 +206,12 @@ def shot_candidate_to_dict(candidate: ShotCandidate) -> dict[str, object]:
         ],
         "continuity_points": [
             sparse_detection_to_dict(point) for point in candidate.continuity_points
+        ],
+        "pickup_points": [
+            sparse_detection_to_dict(point) for point in candidate.pickup_points
+        ],
+        "post_shot_points": [
+            sparse_detection_to_dict(point) for point in candidate.post_shot_points
         ],
         "gap_predicted_frames": list(candidate.gap_predicted_frames),
         "raw_points": [
@@ -226,6 +247,11 @@ def shot_candidate_to_dict(candidate: ShotCandidate) -> dict[str, object]:
         "arc_render": (
             arc_render_to_dict(candidate.arc_render)
             if candidate.arc_render is not None
+            else None
+        ),
+        "story": (
+            shot_story_to_dict(candidate.story)
+            if candidate.story is not None
             else None
         ),
     }

@@ -7,8 +7,7 @@ import numpy as np
 
 from swishsync_cv.config import VideoOutputConfig
 from swishsync_cv.data import DetectionRecord, HoopLock, ShotCandidate, SparseBallDetection
-from swishsync_cv.visualization.arc_drawing import draw_finalized_arc
-from swishsync_cv.visualization.continuity_drawing import draw_continuity_track
+from swishsync_cv.visualization.shot_story_drawing import draw_shot_story
 
 BASKETBALL_COLOR = (0, 140, 255)
 HOOP_CANDIDATE_COLOR = (255, 120, 80)
@@ -42,11 +41,11 @@ def render_debug_panel(
     if sparse_point is not None and detection_ran:
         _draw_sparse_detection(panel, sparse_point)
     if collecting_shot is not None and collecting_shot.state == "collecting_shot":
-        _draw_collection_preview(panel, collecting_shot)
+        _draw_collection_preview(panel, collecting_shot, config)
     elif display_shot is not None and display_shot.insufficient_points_for_fit:
-        _draw_insufficient_fit(panel, display_shot)
+        _draw_insufficient_fit(panel, display_shot, config)
     elif display_shot is not None and display_shot.parabola_fit is not None:
-        _draw_finalized_arc(panel, display_shot)
+        _draw_finalized_shot_overlay(panel, display_shot, config)
     _draw_debug_hud(
         panel,
         frame_index=frame_index,
@@ -138,8 +137,17 @@ def _draw_hoop_lock(
     )
 
 
-def _draw_collection_preview(frame: np.ndarray, collecting_shot: ShotCandidate) -> None:
-    _draw_measured_point_track(frame, collecting_shot)
+def _draw_collection_preview(
+    frame: np.ndarray,
+    collecting_shot: ShotCandidate,
+    config: VideoOutputConfig,
+) -> None:
+    draw_shot_story(
+        frame,
+        collecting_shot,
+        simplified=True,
+        story_config=config.shot_story,
+    )
     cv2.putText(
         frame,
         "COLLECTING (no fit)",
@@ -152,32 +160,30 @@ def _draw_collection_preview(frame: np.ndarray, collecting_shot: ShotCandidate) 
     )
 
 
-def _draw_measured_point_track(frame: np.ndarray, shot: ShotCandidate) -> None:
-    draw_continuity_track(frame, shot)
-
-
-def _draw_dotted_line(
+def _draw_finalized_shot_overlay(
     frame: np.ndarray,
-    start: tuple[int, int],
-    end: tuple[int, int],
-    color: tuple[int, int, int],
+    display_shot: ShotCandidate,
+    config: VideoOutputConfig,
 ) -> None:
-    x1, y1 = start
-    x2, y2 = end
-    length = int(((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5)
-    if length <= 0:
-        return
-    steps = max(length // 6, 1)
-    for step in range(0, steps, 2):
-        t0 = step / steps
-        t1 = min((step + 1) / steps, 1.0)
-        p0 = (int(x1 + (x2 - x1) * t0), int(y1 + (y2 - y1) * t0))
-        p1 = (int(x1 + (x2 - x1) * t1), int(y1 + (y2 - y1) * t1))
-        cv2.line(frame, p0, p1, color, 1, cv2.LINE_AA)
+    draw_shot_story(
+        frame,
+        display_shot,
+        simplified=True,
+        story_config=config.shot_story,
+    )
 
 
-def _draw_insufficient_fit(frame: np.ndarray, display_shot: ShotCandidate) -> None:
-    _draw_measured_point_track(frame, display_shot)
+def _draw_insufficient_fit(
+    frame: np.ndarray,
+    display_shot: ShotCandidate,
+    config: VideoOutputConfig,
+) -> None:
+    draw_shot_story(
+        frame,
+        display_shot,
+        simplified=True,
+        story_config=config.shot_story,
+    )
     cv2.putText(
         frame,
         "INSUFFICIENT POINTS FOR FIT",
@@ -188,11 +194,6 @@ def _draw_insufficient_fit(frame: np.ndarray, display_shot: ShotCandidate) -> No
         2,
         cv2.LINE_AA,
     )
-
-
-def _draw_finalized_arc(frame: np.ndarray, display_shot: ShotCandidate) -> None:
-    draw_continuity_track(frame, display_shot)
-    draw_finalized_arc(frame, display_shot)
 
 
 def _draw_sparse_detection(frame: np.ndarray, point: SparseBallDetection) -> None:

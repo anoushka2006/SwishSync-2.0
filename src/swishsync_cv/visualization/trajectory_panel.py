@@ -5,16 +5,13 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-from swishsync_cv.data import FitDiagnostics, HoopLock, PointDiagnostic, ShotCandidate
-from swishsync_cv.tracking.gap_recovery import continuity_track
+from swishsync_cv.config import AnalyticalViewConfig, ShotStoryConfig, VideoOutputConfig
+from swishsync_cv.data import FitDiagnostics, HoopLock, ShotCandidate
 from swishsync_cv.tracking.parabola import confidence_tier
-from swishsync_cv.visualization.arc_drawing import draw_finalized_arc
-from swishsync_cv.visualization.continuity_drawing import GAP_PREDICTED_COLOR, draw_continuity_track
+from swishsync_cv.visualization.shot_story_drawing import GAP_PREDICTED_COLOR, draw_shot_story
 
 PANEL_TITLE = "Shot Trajectory"
 TEXT_COLOR = (235, 235, 235)
-COLLECTING_PATH_COLOR = (130, 130, 170)
-FINAL_ARC_COLOR = (80, 220, 255)
 APEX_COLOR = (255, 180, 80)
 HOOP_COLOR = (80, 120, 255)
 HIGH_CONF_COLOR = (80, 220, 120)
@@ -31,11 +28,16 @@ def render_trajectory_panel(
     lifecycle_state: str,
     candidate_point_count: int,
     background_color: tuple[int, int, int] = (24, 24, 28),
+    finalized_shots: list[ShotCandidate] | None = None,
+    video_config: VideoOutputConfig | None = None,
 ) -> np.ndarray:
-    """Render camera-space collection preview or one finalized parabola."""
+    """Render camera-space collection preview or phased shot lifecycle story."""
 
     width, height = frame_size
     panel = np.full((height, width, 3), background_color, dtype=np.uint8)
+    config = video_config or VideoOutputConfig()
+    story_config = config.shot_story
+    analytical = config.analytical_view
 
     _draw_header(panel, lifecycle_state, candidate_point_count)
 
@@ -52,13 +54,27 @@ def render_trajectory_panel(
             thickness=2,
         )
 
+    if config.show_shot_history and finalized_shots:
+        for prior_shot in finalized_shots:
+            if prior_shot is display_shot:
+                continue
+            if prior_shot.state != "shot_finalized":
+                continue
+            draw_shot_story(
+                panel,
+                prior_shot,
+                opacity=analytical.completed_opacity,
+                arc_thickness=analytical.completed_arc_thickness,
+                story_config=story_config,
+            )
+
     if collecting_shot is not None and collecting_shot.state == "collecting_shot":
-        _draw_collection_preview(panel, collecting_shot)
+        _draw_collection_preview(panel, collecting_shot, story_config)
 
     if display_shot is not None and display_shot.insufficient_points_for_fit:
-        _draw_insufficient_shot(panel, display_shot)
+        _draw_insufficient_shot(panel, display_shot, story_config, analytical)
     elif display_shot is not None and display_shot.parabola_fit is not None:
-        _draw_finalized_shot(panel, display_shot)
+        _draw_finalized_shot(panel, display_shot, story_config, analytical)
 
     if (
         collecting_shot is None
@@ -116,8 +132,12 @@ def _draw_header(panel: np.ndarray, lifecycle_state: str, candidate_point_count:
     )
 
 
-def _draw_collection_preview(panel: np.ndarray, collecting_shot: ShotCandidate) -> None:
-    draw_continuity_track(panel, collecting_shot)
+def _draw_collection_preview(
+    panel: np.ndarray,
+    collecting_shot: ShotCandidate,
+    story_config: ShotStoryConfig,
+) -> None:
+    draw_shot_story(panel, collecting_shot, story_config=story_config)
 
     cv2.putText(
         panel,
@@ -131,8 +151,19 @@ def _draw_collection_preview(panel: np.ndarray, collecting_shot: ShotCandidate) 
     )
 
 
-def _draw_insufficient_shot(panel: np.ndarray, display_shot: ShotCandidate) -> None:
-    draw_continuity_track(panel, display_shot)
+def _draw_insufficient_shot(
+    panel: np.ndarray,
+    display_shot: ShotCandidate,
+    story_config: ShotStoryConfig,
+    analytical: AnalyticalViewConfig,
+) -> None:
+    draw_shot_story(
+        panel,
+        display_shot,
+        opacity=analytical.active_opacity,
+        show_flight_dots=True,
+        story_config=story_config,
+    )
 
     cv2.putText(
         panel,
@@ -156,13 +187,25 @@ def _draw_insufficient_shot(panel: np.ndarray, display_shot: ShotCandidate) -> N
     )
 
 
-def _draw_finalized_shot(panel: np.ndarray, display_shot: ShotCandidate) -> None:
+def _draw_finalized_shot(
+    panel: np.ndarray,
+    display_shot: ShotCandidate,
+    story_config: ShotStoryConfig,
+    analytical: AnalyticalViewConfig,
+) -> None:
     fit = display_shot.parabola_fit
     if fit is None:
         return
 
-    draw_finalized_arc(panel, display_shot)
-    draw_continuity_track(panel, display_shot)
+    draw_shot_story(
+        panel,
+        display_shot,
+        opacity=analytical.active_opacity,
+        arc_thickness=analytical.active_arc_thickness,
+        show_flight_dots=True,
+        show_legend=True,
+        story_config=story_config,
+    )
 
     diagnostics = display_shot.fit_diagnostics
     if diagnostics is not None:
@@ -176,23 +219,6 @@ def _draw_finalized_shot(panel: np.ndarray, display_shot: ShotCandidate) -> None
                     markerSize=12,
                     thickness=2,
                 )
-                continue
-            _draw_confidence_point(
-                panel,
-                int(round(point.x)),
-                int(round(point.y)),
-                point.confidence,
-                is_outlier=point.is_outlier or point.excluded_from_fit,
-            )
-    else:
-        for point in display_shot.candidate_points:
-            _draw_confidence_point(
-                panel,
-                int(round(point.x)),
-                int(round(point.y)),
-                point.confidence,
-                is_outlier=False,
-            )
 
     for point in display_shot.excluded_debug_points:
         _draw_confidence_point(
@@ -265,9 +291,11 @@ def _draw_fit_diagnostics_hud(
                 f"gap predicted={display_shot.confidence.gap_predicted_count}"
                 f" coverage={display_shot.confidence.continuity_coverage:.0%}"
             )
+    if display_shot.story is not None:
+        lines.append(f"release f{display_shot.story.release_frame}")
 
     y_offset = 76
-    for line in lines:
+    for line in lines[:6]:
         cv2.putText(
             panel,
             line,
@@ -286,23 +314,3 @@ def _draw_fit_diagnostics_hud(
     cv2.putText(panel, "low", (legend_x, 108), cv2.FONT_HERSHEY_SIMPLEX, 0.4, LOW_CONF_COLOR, 1)
     cv2.putText(panel, "outlier", (legend_x, 124), cv2.FONT_HERSHEY_SIMPLEX, 0.4, OUTLIER_COLOR, 1)
     cv2.putText(panel, "gap", (legend_x, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.4, GAP_PREDICTED_COLOR, 1)
-
-
-def _draw_dotted_line(
-    panel: np.ndarray,
-    start: tuple[int, int],
-    end: tuple[int, int],
-    color: tuple[int, int, int],
-) -> None:
-    x1, y1 = start
-    x2, y2 = end
-    length = int(((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5)
-    if length <= 0:
-        return
-    steps = max(length // 6, 1)
-    for step in range(0, steps, 2):
-        t0 = step / steps
-        t1 = min((step + 1) / steps, 1.0)
-        p0 = (int(x1 + (x2 - x1) * t0), int(y1 + (y2 - y1) * t0))
-        p1 = (int(x1 + (x2 - x1) * t1), int(y1 + (y2 - y1) * t1))
-        cv2.line(panel, p0, p1, color, 1, cv2.LINE_AA)
