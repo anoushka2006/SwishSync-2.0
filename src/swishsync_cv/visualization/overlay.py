@@ -7,13 +7,14 @@ import numpy as np
 
 from swishsync_cv.config import VideoOutputConfig
 from swishsync_cv.data import DetectionRecord, HoopLock, ShotCandidate, SparseBallDetection
+from swishsync_cv.visualization.arc_drawing import draw_finalized_arc
+from swishsync_cv.visualization.continuity_drawing import draw_continuity_track
 
 BASKETBALL_COLOR = (0, 140, 255)
 HOOP_CANDIDATE_COLOR = (255, 120, 80)
 HOOP_LOCK_COLOR = (80, 220, 120)
 COLLECTING_POINT_COLOR = (200, 200, 255)
 COLLECTING_PATH_COLOR = (160, 160, 220)
-FINAL_ARC_COLOR = (80, 220, 255)
 TEXT_COLOR = (255, 255, 255)
 
 
@@ -152,15 +153,7 @@ def _draw_collection_preview(frame: np.ndarray, collecting_shot: ShotCandidate) 
 
 
 def _draw_measured_point_track(frame: np.ndarray, shot: ShotCandidate) -> None:
-    points = [
-        (int(round(point.x)), int(round(point.y)))
-        for point in shot.candidate_points
-    ]
-    for point in points:
-        cv2.circle(frame, point, 4, COLLECTING_POINT_COLOR, -1)
-    if len(points) >= 2:
-        for start, end in zip(points, points[1:]):
-            _draw_dotted_line(frame, start, end, COLLECTING_PATH_COLOR)
+    draw_continuity_track(frame, shot)
 
 
 def _draw_dotted_line(
@@ -198,20 +191,8 @@ def _draw_insufficient_fit(frame: np.ndarray, display_shot: ShotCandidate) -> No
 
 
 def _draw_finalized_arc(frame: np.ndarray, display_shot: ShotCandidate) -> None:
-    fit = display_shot.parabola_fit
-    if fit is None:
-        return
-    arc_points = fit.sample_arc(num_points=80)
-    pixel_points = [(int(round(x)), int(round(y))) for x, y in arc_points]
-    if len(pixel_points) >= 2:
-        cv2.polylines(
-            frame,
-            [np.asarray(pixel_points, dtype=np.int32)],
-            isClosed=False,
-            color=FINAL_ARC_COLOR,
-            thickness=3,
-            lineType=cv2.LINE_AA,
-        )
+    draw_continuity_track(frame, display_shot)
+    draw_finalized_arc(frame, display_shot)
 
 
 def _draw_sparse_detection(frame: np.ndarray, point: SparseBallDetection) -> None:

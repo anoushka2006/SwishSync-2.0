@@ -124,7 +124,15 @@ def run_pipeline(
                     hoop_selection_attempted = True
 
                 collecting = shot_manager.lifecycle_state == "collecting_shot"
-                detection_ran = sparse_buffer.should_detect(packet.index, dense=collecting)
+                pre_first_shot = (
+                    shot_manager.lifecycle_state == "idle"
+                    and not shot_manager.finalized_shots
+                )
+                detection_ran = sparse_buffer.should_detect(
+                    packet.index,
+                    dense=collecting,
+                    idle=pre_first_shot,
+                )
                 detections: list[DetectionRecord] = []
 
                 if detection_ran:

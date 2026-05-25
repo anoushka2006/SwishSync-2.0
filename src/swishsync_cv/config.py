@@ -67,16 +67,30 @@ class HoopLockConfig:
 
 
 @dataclass(frozen=True)
+class GapRecoveryConfig:
+    """Short-gap parabolic continuity for active shot collection."""
+
+    max_short_gap_fill_frames: int = 6
+    min_measured_for_gap_predict: int = 3
+    gap_predict_tail_points: int = 5
+    synthetic_gap_confidence: float = 0.35
+    extend_idle_with_gap_predict: bool = True
+
+
+@dataclass(frozen=True)
 class ShotCandidateConfig:
     """Heuristic thresholds for shot start/end and motion validation."""
 
+    gap_recovery: GapRecoveryConfig = field(default_factory=GapRecoveryConfig)
     min_points_to_start: int = 3
     upward_velocity_threshold: float = 2.0
     upper_body_y_ratio: float = 0.55
+    start_below_rim_margin_px: float = 350.0
     max_horizontal_jump_px: float = 120.0
     max_vertical_accel_px: float = 80.0
     max_parabola_deviation_px: float = 45.0
     post_rim_extension_frames: int = 12
+    post_rim_measured_cap: int = 5
     max_idle_frames: int = 8
     min_validated_points_for_fit: int = 4
     min_measured_points_for_fit: int = 5
@@ -85,6 +99,7 @@ class ShotCandidateConfig:
     post_finalize_cooldown_frames: int = 25
     floor_below_rim_margin_px: float = 100.0
     rim_anchor_rmse_regression_ratio: float = 1.15
+    max_visual_extension_ratio: float = 2.5
 
 
 @dataclass(frozen=True)

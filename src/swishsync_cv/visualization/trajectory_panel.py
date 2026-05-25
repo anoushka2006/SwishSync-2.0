@@ -6,7 +6,10 @@ import cv2
 import numpy as np
 
 from swishsync_cv.data import FitDiagnostics, HoopLock, PointDiagnostic, ShotCandidate
+from swishsync_cv.tracking.gap_recovery import continuity_track
 from swishsync_cv.tracking.parabola import confidence_tier
+from swishsync_cv.visualization.arc_drawing import draw_finalized_arc
+from swishsync_cv.visualization.continuity_drawing import GAP_PREDICTED_COLOR, draw_continuity_track
 
 PANEL_TITLE = "Shot Trajectory"
 TEXT_COLOR = (235, 235, 235)
@@ -114,16 +117,7 @@ def _draw_header(panel: np.ndarray, lifecycle_state: str, candidate_point_count:
 
 
 def _draw_collection_preview(panel: np.ndarray, collecting_shot: ShotCandidate) -> None:
-    pixel_points = [
-        (int(round(point.x)), int(round(point.y)), point.confidence)
-        for point in collecting_shot.candidate_points
-    ]
-    for x, y, confidence in pixel_points:
-        _draw_confidence_point(panel, x, y, confidence, is_outlier=False)
-
-    if len(pixel_points) >= 2:
-        for (x1, y1, _), (x2, y2, _) in zip(pixel_points, pixel_points[1:]):
-            _draw_dotted_line(panel, (x1, y1), (x2, y2), COLLECTING_PATH_COLOR)
+    draw_continuity_track(panel, collecting_shot)
 
     cv2.putText(
         panel,
@@ -138,15 +132,7 @@ def _draw_collection_preview(panel: np.ndarray, collecting_shot: ShotCandidate) 
 
 
 def _draw_insufficient_shot(panel: np.ndarray, display_shot: ShotCandidate) -> None:
-    pixel_points = [
-        (int(round(point.x)), int(round(point.y)), point.confidence)
-        for point in display_shot.candidate_points
-    ]
-    for x, y, confidence in pixel_points:
-        _draw_confidence_point(panel, x, y, confidence, is_outlier=False)
-    if len(pixel_points) >= 2:
-        for (x1, y1, _), (x2, y2, _) in zip(pixel_points, pixel_points[1:]):
-            _draw_dotted_line(panel, (x1, y1), (x2, y2), COLLECTING_PATH_COLOR)
+    draw_continuity_track(panel, display_shot)
 
     cv2.putText(
         panel,
@@ -175,17 +161,8 @@ def _draw_finalized_shot(panel: np.ndarray, display_shot: ShotCandidate) -> None
     if fit is None:
         return
 
-    arc_points = fit.sample_arc(num_points=96)
-    pixel_points = [(int(round(x)), int(round(y))) for x, y in arc_points]
-    if len(pixel_points) >= 2:
-        cv2.polylines(
-            panel,
-            [np.asarray(pixel_points, dtype=np.int32)],
-            isClosed=False,
-            color=FINAL_ARC_COLOR,
-            thickness=3,
-            lineType=cv2.LINE_AA,
-        )
+    draw_finalized_arc(panel, display_shot)
+    draw_continuity_track(panel, display_shot)
 
     diagnostics = display_shot.fit_diagnostics
     if diagnostics is not None:
@@ -283,6 +260,11 @@ def _draw_fit_diagnostics_hud(
         lines.append(
             f"trajectory confidence={int(round(display_shot.confidence.trajectory_confidence * 100))}%"
         )
+        if display_shot.confidence.gap_predicted_count:
+            lines.append(
+                f"gap predicted={display_shot.confidence.gap_predicted_count}"
+                f" coverage={display_shot.confidence.continuity_coverage:.0%}"
+            )
 
     y_offset = 76
     for line in lines:
@@ -303,6 +285,7 @@ def _draw_fit_diagnostics_hud(
     cv2.putText(panel, "med", (legend_x, 92), cv2.FONT_HERSHEY_SIMPLEX, 0.4, MEDIUM_CONF_COLOR, 1)
     cv2.putText(panel, "low", (legend_x, 108), cv2.FONT_HERSHEY_SIMPLEX, 0.4, LOW_CONF_COLOR, 1)
     cv2.putText(panel, "outlier", (legend_x, 124), cv2.FONT_HERSHEY_SIMPLEX, 0.4, OUTLIER_COLOR, 1)
+    cv2.putText(panel, "gap", (legend_x, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.4, GAP_PREDICTED_COLOR, 1)
 
 
 def _draw_dotted_line(

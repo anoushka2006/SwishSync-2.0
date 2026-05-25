@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from swishsync_cv.data import (
+    ArcRenderMetadata,
     CompletedShot,
     DetectionRecord,
     FitDiagnostics,
@@ -17,6 +18,7 @@ from swishsync_cv.data import (
     ShotCandidate,
     SparseBallDetection,
     TrajectoryPoint,
+    effective_point_source,
 )
 
 
@@ -102,6 +104,7 @@ def sparse_detection_to_dict(point: SparseBallDetection) -> dict[str, object]:
         "y": point.y,
         "confidence": point.confidence,
         "interpolated": point.interpolated,
+        "source": effective_point_source(point),
     }
 
 
@@ -147,6 +150,36 @@ def fit_diagnostics_to_dict(diagnostics: FitDiagnostics) -> dict[str, object]:
     }
 
 
+def arc_render_to_dict(metadata: ArcRenderMetadata) -> dict[str, object]:
+    return {
+        "fit_x_range": {
+            "min": metadata.fit_x_range[0],
+            "max": metadata.fit_x_range[1],
+        },
+        "render_x_range": {
+            "min": metadata.render_x_range[0],
+            "max": metadata.render_x_range[1],
+        },
+        "rim_center": (
+            {"x": metadata.rim_center[0], "y": metadata.rim_center[1]}
+            if metadata.rim_center is not None
+            else None
+        ),
+        "rim_anchor_used": metadata.rim_anchor_used,
+        "visual_extension_used": metadata.visual_extension_used,
+        "observed_segment_end": (
+            {"x": metadata.observed_segment_end[0], "y": metadata.observed_segment_end[1]}
+            if metadata.observed_segment_end is not None
+            else None
+        ),
+        "extended_segment_end": (
+            {"x": metadata.extended_segment_end[0], "y": metadata.extended_segment_end[1]}
+            if metadata.extended_segment_end is not None
+            else None
+        ),
+    }
+
+
 def shot_candidate_to_dict(candidate: ShotCandidate) -> dict[str, object]:
     payload: dict[str, object] = {
         "start_frame": candidate.start_frame,
@@ -156,6 +189,10 @@ def shot_candidate_to_dict(candidate: ShotCandidate) -> dict[str, object]:
         "candidate_points": [
             sparse_detection_to_dict(point) for point in candidate.candidate_points
         ],
+        "continuity_points": [
+            sparse_detection_to_dict(point) for point in candidate.continuity_points
+        ],
+        "gap_predicted_frames": list(candidate.gap_predicted_frames),
         "raw_points": [
             sparse_detection_to_dict(point) for point in candidate.candidate_points
         ],
@@ -180,8 +217,15 @@ def shot_candidate_to_dict(candidate: ShotCandidate) -> dict[str, object]:
                 "detection_confidence": candidate.confidence.detection_confidence,
                 "trajectory_confidence": candidate.confidence.trajectory_confidence,
                 "overall_confidence": candidate.confidence.overall_confidence,
+                "continuity_coverage": candidate.confidence.continuity_coverage,
+                "gap_predicted_count": candidate.confidence.gap_predicted_count,
             }
             if candidate.confidence is not None
+            else None
+        ),
+        "arc_render": (
+            arc_render_to_dict(candidate.arc_render)
+            if candidate.arc_render is not None
             else None
         ),
     }

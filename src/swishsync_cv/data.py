@@ -12,6 +12,7 @@ DetectionCategory = Literal["basketball", "hoop"]
 ShotLifecycleState = Literal["idle", "collecting_shot", "shot_finalized"]
 ShotFinalizeReason = Literal["post_rim", "horizontal_jump", "idle", "end_of_video", "unknown"]
 ShotMotionDirection = Literal["ascending", "descending", "unknown"]
+PointSource = Literal["measured", "sparse_linear", "gap_predicted"]
 
 
 @dataclass(frozen=True)
@@ -89,6 +90,19 @@ class SparseBallDetection:
     y: float
     confidence: float
     interpolated: bool = False
+    source: PointSource = "measured"
+
+
+def effective_point_source(point: SparseBallDetection) -> PointSource:
+    """Resolve point provenance, including legacy interpolated-only records."""
+
+    if point.source != "measured":
+        return point.source
+    return "sparse_linear" if point.interpolated else "measured"
+
+
+def is_measured_detection(point: SparseBallDetection) -> bool:
+    return effective_point_source(point) == "measured"
 
 
 @dataclass(frozen=True)
@@ -133,9 +147,19 @@ class ParabolaFit:
         return a * x * x + b * x + c
 
     def sample_arc(self, num_points: int = 96) -> list[tuple[float, float]]:
+        return self.sample_arc_range(self.x_min, self.x_max, num_points)
+
+    def sample_arc_range(
+        self,
+        x_start: float,
+        x_end: float,
+        num_points: int = 96,
+    ) -> list[tuple[float, float]]:
         if num_points < 2:
             return []
-        xs = np.linspace(self.x_min, self.x_max, num_points)
+        start = float(min(x_start, x_end))
+        end = float(max(x_start, x_end))
+        xs = np.linspace(start, end, num_points)
         return [(float(x), float(self.evaluate_y(x))) for x in xs]
 
 
@@ -174,6 +198,8 @@ class ConfidenceScores:
     detection_confidence: float
     trajectory_confidence: float
     overall_confidence: float
+    continuity_coverage: float | None = None
+    gap_predicted_count: int = 0
 
     def as_percentages(self) -> tuple[int, int, int]:
         return (
@@ -183,6 +209,19 @@ class ConfidenceScores:
         )
 
 
+@dataclass(frozen=True)
+class ArcRenderMetadata:
+    """Render-only arc extension metadata (does not affect fitting)."""
+
+    fit_x_range: tuple[float, float]
+    render_x_range: tuple[float, float]
+    rim_center: tuple[float, float] | None
+    rim_anchor_used: bool
+    visual_extension_used: bool
+    observed_segment_end: tuple[float, float] | None
+    extended_segment_end: tuple[float, float] | None
+
+
 @dataclass
 class ShotCandidate:
     """Buffered shot attempt collected before single-pass reconstruction."""
@@ -190,6 +229,8 @@ class ShotCandidate:
     start_frame: int
     end_frame: int | None = None
     candidate_points: list[SparseBallDetection] = field(default_factory=list)
+    continuity_points: list[SparseBallDetection] = field(default_factory=list)
+    gap_predicted_frames: list[int] = field(default_factory=list)
     validated_points: list[SparseBallDetection] = field(default_factory=list)
     parabola_fit: ParabolaFit | None = None
     fit_diagnostics: FitDiagnostics | None = None
@@ -197,8 +238,11 @@ class ShotCandidate:
     state: ShotLifecycleState = "collecting_shot"
     post_rim_frames_remaining: int = 0
     post_rim_started: bool = False
+    post_rim_measured_count: int = 0
+    interior_apex_seen: bool = False
     insufficient_points_for_fit: bool = False
     excluded_debug_points: list[SparseBallDetection] = field(default_factory=list)
+    arc_render: ArcRenderMetadata | None = None
 
     @property
     def raw_points(self) -> list[SparseBallDetection]:

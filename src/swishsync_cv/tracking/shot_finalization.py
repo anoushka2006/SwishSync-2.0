@@ -6,6 +6,7 @@ import logging
 
 from swishsync_cv.config import HoopLockConfig, ShotCandidateConfig
 from swishsync_cv.data import HoopLock, ShotCandidate
+from swishsync_cv.tracking.arc_render import compute_arc_render_metadata
 from swishsync_cv.tracking.confidence import score_shot_confidence
 from swishsync_cv.tracking.parabola import (
     fit_weighted_parabola_robust,
@@ -84,10 +85,25 @@ def finalize_shot(
 
         result = _select_best_fit(unanchored, anchored, regression_ratio)
         if result is not None:
-            candidate.parabola_fit, candidate.fit_diagnostics = result
+            candidate.parabola_fit, candidate.fit_diagnostics, rim_anchor_used = result
             candidate.confidence = score_shot_confidence(candidate)
+            candidate.arc_render = compute_arc_render_metadata(
+                candidate.parabola_fit,
+                fit_points,
+                hoop_lock,
+                rim_anchor_used,
+                config,
+            )
             _log_fit_summary(candidate, fit_points, excluded_for_fit)
             _log_outliers(candidate)
+            if candidate.arc_render.visual_extension_used:
+                logger.info(
+                    "visual arc extension fit_x=%.0f..%.0f render_x=%.0f..%.0f",
+                    candidate.arc_render.fit_x_range[0],
+                    candidate.arc_render.fit_x_range[1],
+                    candidate.arc_render.render_x_range[0],
+                    candidate.arc_render.render_x_range[1],
+                )
     elif measured_count > 0:
         candidate.insufficient_points_for_fit = True
         logger.info(
@@ -138,30 +154,32 @@ def _select_best_fit(
     unanchored: tuple | None,
     anchored: tuple | None,
     regression_ratio: float,
-):
+) -> tuple | None:
     if unanchored is None and anchored is None:
         return None
     if unanchored is None:
-        return anchored
+        fit, diag = anchored
+        return fit, diag, True
     if anchored is None:
-        return unanchored
+        fit, diag = unanchored
+        return fit, diag, False
 
-    _, unanchored_diag = unanchored
-    _, anchored_diag = anchored
+    unanchored_fit, unanchored_diag = unanchored
+    anchored_fit, anchored_diag = anchored
     if anchored_diag.weighted_residual_rmse <= unanchored_diag.weighted_residual_rmse * regression_ratio:
         logger.info(
             "using rim anchor rmse=%.1f (unanchored=%.1f)",
             anchored_diag.weighted_residual_rmse,
             unanchored_diag.weighted_residual_rmse,
         )
-        return anchored
+        return anchored_fit, anchored_diag, True
 
     logger.info(
         "skipping rim anchor rmse=%.1f worse than unanchored=%.1f",
         anchored_diag.weighted_residual_rmse,
         unanchored_diag.weighted_residual_rmse,
     )
-    return unanchored
+    return unanchored_fit, unanchored_diag, False
 
 
 def _log_fit_summary(

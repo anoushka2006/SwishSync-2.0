@@ -14,6 +14,7 @@ from swishsync_cv.data import (
     ShotMotionDirection,
     SparseBallDetection,
 )
+from swishsync_cv.tracking.gap_recovery import append_continuity_point, backfill_gap_points
 from swishsync_cv.tracking.parabola import is_floor_bounce_point
 from swishsync_cv.tracking.shot_finalization import finalize_shot
 
@@ -138,7 +139,8 @@ class ShotCandidateManager:
             ):
                 self.active.post_rim_started = True
 
-            if self._should_skip_floor_bounce_point(point, hoop_lock):
+            skip_floor = self._should_skip_floor_bounce_point(point, hoop_lock)
+            if skip_floor:
                 self.active.excluded_debug_points.append(point)
                 self.post_shot_debug_points.append(point)
                 logger.info(
@@ -147,7 +149,24 @@ class ShotCandidateManager:
                     point.y,
                 )
             else:
+                for predicted in backfill_gap_points(
+                    self.active.candidate_points,
+                    point,
+                    hoop_lock,
+                    self.config,
+                ):
+                    append_continuity_point(self.active, predicted)
                 self.active.candidate_points.append(point)
+                append_continuity_point(self.active, point)
+                self._update_interior_apex_seen()
+                if self.active.post_rim_started and not point.interpolated:
+                    self.active.post_rim_measured_count += 1
+                    if (
+                        self.active.post_rim_measured_count
+                        >= self.config.post_rim_measured_cap
+                    ):
+                        self._pending_finalize_reason = "post_rim"
+                        return self._finalize_active()
                 logger.info(
                     "point added frame=%s total=%s",
                     frame_index,
@@ -169,19 +188,21 @@ class ShotCandidateManager:
             return
 
         seed_points = self._pre_shot_buffer[-self.config.min_points_to_start :]
-        measured_seeds = [point for point in seed_points if not point.interpolated]
+        measured_seeds = self._non_floor_measured(
+            seed_points,
+            self._last_hoop_lock,
+        )
+        if len(measured_seeds) < self.config.min_points_to_start:
+            return
         self._interpolated_ignored_count = sum(
             1 for point in seed_points if point.interpolated
         )
         self.active = ShotCandidate(
-            start_frame=(
-                measured_seeds[0].frame_index
-                if measured_seeds
-                else seed_points[0].frame_index
-            ),
+            start_frame=measured_seeds[0].frame_index,
             state="collecting_shot",
         )
         self.active.candidate_points.extend(measured_seeds)
+        self.active.continuity_points.extend(measured_seeds)
         self._frames_since_point = 0
         self._pre_shot_buffer.clear()
         logger.info(
@@ -190,8 +211,26 @@ class ShotCandidateManager:
             len(self.active.candidate_points),
         )
 
+    def _non_floor_measured(
+        self,
+        points: list[SparseBallDetection],
+        hoop_lock: HoopLock | None,
+    ) -> list[SparseBallDetection]:
+        measured = [point for point in points if not point.interpolated]
+        if hoop_lock is None or not hoop_lock.is_locked:
+            return measured
+        return [
+            point
+            for point in measured
+            if not is_floor_bounce_point(
+                point,
+                hoop_lock,
+                floor_margin_px=self.config.floor_below_rim_margin_px,
+            )
+        ]
+
     def _should_start_collection(self, recent_points: list[SparseBallDetection]) -> bool:
-        measured = [point for point in recent_points if not point.interpolated]
+        measured = self._non_floor_measured(recent_points, self._last_hoop_lock)
         if len(measured) < self.config.min_points_to_start:
             return False
 
@@ -208,8 +247,7 @@ class ShotCandidateManager:
         ):
             return False
 
-        upper_body_threshold = self.frame_height * self.config.upper_body_y_ratio
-        if latest.y >= upper_body_threshold:
+        if not self._ball_in_valid_start_zone(latest):
             return False
 
         seed_points = measured[-self.config.min_points_to_start :]
@@ -219,8 +257,15 @@ class ShotCandidateManager:
         x_spread = max(xs) - min(xs)
         return y_spread > 8 and x_spread < y_spread * 2.5
 
+    def _ball_in_valid_start_zone(self, point: SparseBallDetection) -> bool:
+        if self._last_hoop_lock is not None and self._last_hoop_lock.is_locked:
+            rim_y = self._last_hoop_lock.rim_center_y
+            return point.y < rim_y + self.config.start_below_rim_margin_px
+        upper_body_threshold = self.frame_height * self.config.upper_body_y_ratio
+        return point.y < upper_body_threshold
+
     def _has_clear_new_release(self, recent_points: list[SparseBallDetection]) -> bool:
-        measured = [point for point in recent_points if not point.interpolated]
+        measured = self._non_floor_measured(recent_points, self._last_hoop_lock)
         if len(measured) < self.config.min_points_to_start:
             return False
 
@@ -273,13 +318,24 @@ class ShotCandidateManager:
         hoop_lock: HoopLock | None,
     ) -> bool:
         assert self.active is not None
-        if not self.active.post_rim_started:
+        if not (
+            self.active.post_rim_started or self.active.interior_apex_seen
+        ):
             return False
         return is_floor_bounce_point(
             point,
             hoop_lock,
             floor_margin_px=self.config.floor_below_rim_margin_px,
         )
+
+    def _update_interior_apex_seen(self) -> None:
+        assert self.active is not None
+        points = self.active.candidate_points
+        if len(points) < self.config.min_validated_points_for_fit:
+            return
+        apex_index = min(range(len(points)), key=lambda index: points[index].y)
+        if 0 < apex_index < len(points) - 1:
+            self.active.interior_apex_seen = True
 
     def _should_finalize_after_rim_sequence(
         self,

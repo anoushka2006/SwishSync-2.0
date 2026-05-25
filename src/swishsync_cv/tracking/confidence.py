@@ -2,13 +2,29 @@
 
 from __future__ import annotations
 
-from swishsync_cv.data import ConfidenceScores, FitDiagnostics, ParabolaFit, ShotCandidate, SparseBallDetection
+from swishsync_cv.data import (
+    ConfidenceScores,
+    FitDiagnostics,
+    ParabolaFit,
+    ShotCandidate,
+    SparseBallDetection,
+    effective_point_source,
+    is_measured_detection,
+)
+from swishsync_cv.tracking.gap_recovery import continuity_track
 
 
 def score_shot_confidence(candidate: ShotCandidate) -> ConfidenceScores:
     """Compute detection, trajectory, and overall confidence for a finalized shot."""
 
     points = candidate.candidate_points
+    track = continuity_track(candidate)
+    gap_predicted_count = sum(
+        1 for point in track if effective_point_source(point) == "gap_predicted"
+    )
+    measured_in_track = sum(1 for point in track if is_measured_detection(point))
+    continuity_coverage = measured_in_track / max(len(track), 1)
+
     detection_confidence = _detection_confidence(points)
     trajectory_confidence = _trajectory_confidence(
         points=points,
@@ -20,6 +36,8 @@ def score_shot_confidence(candidate: ShotCandidate) -> ConfidenceScores:
         detection_confidence=detection_confidence,
         trajectory_confidence=trajectory_confidence,
         overall_confidence=overall_confidence,
+        continuity_coverage=continuity_coverage,
+        gap_predicted_count=gap_predicted_count,
     )
 
 
