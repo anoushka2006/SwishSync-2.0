@@ -9,7 +9,12 @@ from swishsync_cv.tracking.shot_finalization import finalize_shot
 from swishsync_cv.tracking.parabola import is_floor_bounce_point
 from swishsync_cv.tracking.shot_story import _should_show_pickup, compute_shot_story
 from swishsync_cv.utils.serialization import shot_candidate_to_dict, write_finalized_shots_json
-from swishsync_cv.visualization.shot_story_drawing import draw_shot_story
+from swishsync_cv.visualization.shot_story_drawing import (
+    MEASURED_COLOR,
+    PICKUP_CONNECTOR_COLOR,
+    draw_shot_story,
+    pickup_connector_eligible,
+)
 from swishsync_cv.visualization.trajectory_panel import render_trajectory_panel
 
 
@@ -314,6 +319,135 @@ def test_serialization_exports_story_and_render_buffers(tmp_path):
     write_finalized_shots_json(output_path, [candidate])
     exported = json.loads(output_path.read_text(encoding="utf-8"))
     assert exported[0]["story"]["flight_start_frame"] == 62
+
+
+def test_pickup_connector_eligible_when_pickup_and_release_are_close():
+    config = ShotStoryConfig(
+        max_pickup_to_release_frame_gap=6,
+        max_pickup_to_release_distance_px=90.0,
+        min_pickup_connector_distance_px=5.0,
+    )
+    last_pickup = SparseBallDetection(61, 0.0, 300.0, 280.0, 0.8)
+    first_flight = SparseBallDetection(62, 33.0, 320.0, 260.0, 0.8)
+
+    assert pickup_connector_eligible(last_pickup, first_flight, config) is True
+
+
+def test_pickup_connector_rejected_when_gap_or_distance_too_large():
+    config = ShotStoryConfig(
+        max_pickup_to_release_frame_gap=3,
+        max_pickup_to_release_distance_px=40.0,
+        min_pickup_connector_distance_px=5.0,
+    )
+    last_pickup = SparseBallDetection(50, 0.0, 100.0, 700.0, 0.8)
+    far_flight = SparseBallDetection(62, 396.0, 350.0, 690.0, 0.8)
+    late_flight = SparseBallDetection(55, 165.0, 310.0, 270.0, 0.8)
+
+    assert pickup_connector_eligible(last_pickup, far_flight, config) is False
+    assert pickup_connector_eligible(last_pickup, late_flight, config) is False
+
+
+def test_pickup_connector_draws_for_close_pickup_and_flight():
+    pickup = [
+        SparseBallDetection(59, 0.0, 1140.0, 450.0, 0.8),
+        SparseBallDetection(60, 33.0, 1155.0, 430.0, 0.8),
+        SparseBallDetection(61, 66.0, 1170.0, 410.0, 0.8),
+    ]
+    measured = [
+        SparseBallDetection(62, 99.0, 1200.0, 400.0, 0.8),
+        SparseBallDetection(63, 132.0, 1190.0, 360.0, 0.8),
+        SparseBallDetection(64, 165.0, 1180.0, 320.0, 0.8),
+        SparseBallDetection(65, 198.0, 1170.0, 285.0, 0.8),
+        SparseBallDetection(66, 231.0, 1155.0, 240.0, 0.7),
+    ]
+    candidate = ShotCandidate(start_frame=62, end_frame=66, state="shot_finalized")
+    candidate.pickup_points = pickup
+    candidate.candidate_points = measured
+    candidate.continuity_points = list(measured)
+    candidate = finalize_shot(
+        candidate,
+        ShotCandidateConfig(),
+        hoop_lock=_hoop(),
+        story_config=ShotStoryConfig(
+            pickup_min_points=2,
+            pickup_min_frame_span=2,
+            max_pickup_to_release_frame_gap=6,
+            max_pickup_to_release_distance_px=90.0,
+        ),
+    )
+    assert candidate.story is not None
+    assert candidate.story.show_pickup is True
+
+    before = shot_candidate_to_dict(candidate)
+    frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+    draw_shot_story(frame, candidate, story_config=ShotStoryConfig())
+    after = shot_candidate_to_dict(candidate)
+    assert before == after
+
+    connector = np.array(
+        tuple(int(channel * 0.55) for channel in PICKUP_CONNECTOR_COLOR),
+        dtype=np.int16,
+    )
+    last_pickup = pickup[-1]
+    first_flight = measured[0]
+    mid_x = int(round((last_pickup.x + first_flight.x) / 2))
+    mid_y = int(round((last_pickup.y + first_flight.y) / 2))
+    patch = frame[mid_y - 2 : mid_y + 3, mid_x - 2 : mid_x + 3].reshape(-1, 3)
+    assert np.any(np.all(np.abs(patch.astype(np.int16) - connector) <= 12, axis=1))
+
+
+def test_pickup_connector_not_drawn_when_pickup_and_flight_disconnected():
+    pickup = [
+        SparseBallDetection(40, 0.0, 100.0, 700.0, 0.8),
+        SparseBallDetection(44, 132.0, 350.0, 690.0, 0.8),
+    ]
+    measured = _ascending_points(start_frame=62)
+    candidate = ShotCandidate(start_frame=62, end_frame=66, state="shot_finalized")
+    candidate.pickup_points = pickup
+    candidate.candidate_points = measured
+    candidate.continuity_points = list(measured)
+    candidate = finalize_shot(
+        candidate,
+        ShotCandidateConfig(),
+        hoop_lock=_hoop(),
+        story_config=ShotStoryConfig(),
+    )
+    assert candidate.story is not None
+    assert candidate.story.show_pickup is False
+
+    frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+    draw_shot_story(frame, candidate)
+    connector = np.array(
+        tuple(int(channel * 0.55) for channel in PICKUP_CONNECTOR_COLOR),
+        dtype=np.int16,
+    )
+    last_pickup = pickup[-1]
+    first_flight = measured[0]
+    mid_x = int(round((last_pickup.x + first_flight.x) / 2))
+    mid_y = int(round((last_pickup.y + first_flight.y) / 2))
+    patch = frame[mid_y - 2 : mid_y + 3, mid_x - 2 : mid_x + 3].reshape(-1, 3)
+    assert not np.any(np.all(np.abs(patch.astype(np.int16) - connector) <= 12, axis=1))
+
+
+def test_finalized_shot_draws_measured_continuity_with_parabola():
+    candidate = ShotCandidate(start_frame=62, end_frame=68, state="shot_finalized")
+    candidate.candidate_points = _ascending_points()
+    candidate.continuity_points = list(candidate.candidate_points)
+    candidate = _finalize_with_story(candidate)
+    assert candidate.parabola_fit is not None
+
+    frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+    draw_shot_story(frame, candidate)
+
+    target = np.array(MEASURED_COLOR, dtype=np.int16)
+    hits = 0
+    for point in candidate.continuity_points:
+        x, y = int(round(point.x)), int(round(point.y))
+        patch = frame[y - 2 : y + 3, x - 2 : x + 3].reshape(-1, 3).astype(np.int16)
+        if np.any(np.all(np.abs(patch - target) <= 25, axis=1)):
+            hits += 1
+
+    assert hits >= 3
 
 
 def test_draw_shot_story_and_panel_do_not_crash():

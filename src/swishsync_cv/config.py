@@ -121,6 +121,10 @@ class ShotStoryConfig:
     pickup_max_horizontal_span_px: float = 200.0
     pickup_min_points: int = 2
     pickup_min_frame_span: int = 3
+    max_pickup_to_release_frame_gap: int = 6
+    max_pickup_to_release_distance_px: float = 90.0
+    min_pickup_connector_distance_px: float = 5.0
+    pickup_connector_opacity_scale: float = 0.55
     max_flight_diagnostic_dots: int = 12
 
 

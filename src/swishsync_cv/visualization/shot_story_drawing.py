@@ -17,6 +17,7 @@ from swishsync_cv.tracking.parabola import confidence_tier
 from swishsync_cv.visualization.arc_drawing import draw_finalized_arc
 
 PICKUP_COLOR = (200, 160, 255)
+PICKUP_CONNECTOR_COLOR = (185, 185, 248)
 POST_SHOT_COLOR = (140, 230, 160)
 GAP_PREDICTED_COLOR = (60, 180, 255)
 RELEASE_COLOR = (255, 220, 120)
@@ -60,6 +61,14 @@ def draw_shot_story(
 
     if collecting:
         _draw_pickup_path(frame, shot.pickup_points, opacity=opacity)
+        _draw_pickup_flight_connectors(
+            frame,
+            shot,
+            story=None,
+            story_config=story_cfg,
+            opacity=opacity,
+            pickup_points=shot.pickup_points,
+        )
         _draw_pre_release_continuity(frame, shot, opacity=opacity)
         if shot.candidate_points:
             _draw_release_marker(
@@ -76,12 +85,14 @@ def draw_shot_story(
             shot,
             opacity=opacity,
             arc_thickness=arc_thickness,
+            story_config=story_cfg,
         )
         return
 
     if shot.parabola_fit is not None and not shot.insufficient_points_for_fit:
         _draw_gap_bridges(frame, shot, story, opacity=opacity)
         _draw_arc_with_opacity(frame, shot, opacity=opacity, thickness=arc_thickness)
+        _draw_measured_continuity_path(frame, shot, opacity=opacity)
     else:
         _draw_measured_continuity_path(frame, shot, opacity=opacity)
 
@@ -92,6 +103,14 @@ def draw_shot_story(
             if point.frame_index in story.pickup_frames
         ]
         _draw_pickup_path(frame, pickup, opacity=opacity)
+        _draw_pickup_flight_connectors(
+            frame,
+            shot,
+            story=story,
+            story_config=story_cfg,
+            opacity=opacity,
+            pickup_points=pickup,
+        )
 
     if story.show_post_shot and shot.post_shot_points:
         _draw_post_shot_path(frame, shot.post_shot_points, opacity=opacity)
@@ -117,6 +136,7 @@ def _draw_storyless_finalized(
     *,
     opacity: float,
     arc_thickness: int,
+    story_config: ShotStoryConfig,
 ) -> None:
     """Render-only fallback when story metadata is missing."""
 
@@ -140,11 +160,20 @@ def _draw_storyless_finalized(
                 show_pickup=False,
             )
             _draw_gap_bridges(frame, shot, fallback_story, opacity=opacity)
+        _draw_measured_continuity_path(frame, shot, opacity=opacity)
     else:
         _draw_measured_continuity_path(frame, shot, opacity=opacity)
 
     if len(shot.pickup_points) >= 2:
         _draw_pickup_path(frame, shot.pickup_points, opacity=opacity)
+        _draw_pickup_flight_connectors(
+            frame,
+            shot,
+            story=None,
+            story_config=story_config,
+            opacity=opacity,
+            pickup_points=shot.pickup_points,
+        )
 
     if len(shot.post_shot_points) >= 2:
         _draw_post_shot_path(frame, shot.post_shot_points, opacity=opacity)
@@ -152,6 +181,28 @@ def _draw_storyless_finalized(
     if shot.candidate_points:
         release = shot.candidate_points[0]
         _draw_release_marker(frame, release.x, release.y, opacity=opacity)
+
+
+def pickup_connector_eligible(
+    last_pickup: SparseBallDetection,
+    first_flight: SparseBallDetection,
+    story_config: ShotStoryConfig,
+) -> bool:
+    """Return True when a render-only pickup→flight connector should be drawn."""
+
+    frame_gap = first_flight.frame_index - last_pickup.frame_index
+    if frame_gap < 0:
+        return False
+    if frame_gap > story_config.max_pickup_to_release_frame_gap:
+        return False
+    distance = float(
+        np.hypot(first_flight.x - last_pickup.x, first_flight.y - last_pickup.y)
+    )
+    if distance > story_config.max_pickup_to_release_distance_px:
+        return False
+    if distance < story_config.min_pickup_connector_distance_px:
+        return False
+    return True
 
 
 def _draw_pickup_path(
@@ -213,6 +264,104 @@ def _draw_pre_release_continuity(
             _draw_dotted_line(frame, p0, p1, _scale_color(GAP_PREDICTED_COLOR, opacity))
         else:
             _draw_dotted_line(frame, p0, p1, _scale_color(MEASURED_COLOR, opacity))
+
+
+def _draw_pickup_flight_connectors(
+    frame: np.ndarray,
+    shot: ShotCandidate,
+    *,
+    story: ShotStoryMetadata | None,
+    story_config: ShotStoryConfig,
+    opacity: float,
+    pickup_points: list[SparseBallDetection],
+) -> None:
+    if not pickup_points or not shot.continuity_points:
+        return
+
+    last_pickup = max(pickup_points, key=lambda point: point.frame_index)
+    release_frame = (
+        story.release_frame
+        if story is not None
+        else (
+            shot.candidate_points[0].frame_index
+            if shot.candidate_points
+            else shot.start_frame
+        )
+    )
+    first_flight = _first_flight_continuity_point(shot, release_frame)
+    if first_flight is None:
+        return
+    if not pickup_connector_eligible(last_pickup, first_flight, story_config):
+        return
+
+    connector_opacity = opacity * story_config.pickup_connector_opacity_scale
+    connector_color = _scale_color(PICKUP_CONNECTOR_COLOR, connector_opacity)
+    _draw_dotted_line(
+        frame,
+        (int(round(last_pickup.x)), int(round(last_pickup.y))),
+        (int(round(first_flight.x)), int(round(first_flight.y))),
+        connector_color,
+        thickness=1,
+    )
+
+    if (
+        shot.parabola_fit is not None
+        and not shot.insufficient_points_for_fit
+    ):
+        arc_start = _fit_arc_start_point(shot)
+        if arc_start is None:
+            return
+        arc_x, arc_y = arc_start
+        arc_distance = float(
+            np.hypot(first_flight.x - arc_x, first_flight.y - arc_y)
+        )
+        if (
+            arc_distance <= story_config.max_pickup_to_release_distance_px
+            and arc_distance >= story_config.min_pickup_connector_distance_px
+        ):
+            _draw_dotted_line(
+                frame,
+                (int(round(first_flight.x)), int(round(first_flight.y))),
+                (int(round(arc_x)), int(round(arc_y))),
+                connector_color,
+                thickness=1,
+            )
+
+
+def _first_flight_continuity_point(
+    shot: ShotCandidate,
+    release_frame: int,
+) -> SparseBallDetection | None:
+    measured = [
+        point
+        for point in continuity_track(shot)
+        if point.frame_index >= release_frame
+        and effective_point_source(point) != "gap_predicted"
+    ]
+    if measured:
+        return min(measured, key=lambda point: point.frame_index)
+
+    fallback = [
+        point
+        for point in continuity_track(shot)
+        if point.frame_index >= release_frame
+    ]
+    if not fallback:
+        return None
+    return min(fallback, key=lambda point: point.frame_index)
+
+
+def _fit_arc_start_point(shot: ShotCandidate) -> tuple[float, float] | None:
+    fit = shot.parabola_fit
+    if fit is None:
+        return None
+
+    arc_x = fit.x_min
+    if shot.arc_render is not None:
+        arc_x = shot.arc_render.fit_x_range[0]
+
+    a, b, c = fit.coefficients
+    return arc_x, a * arc_x * arc_x + b * arc_x + c
 
 
 def _draw_post_shot_path(
