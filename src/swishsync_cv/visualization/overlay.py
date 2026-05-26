@@ -7,7 +7,7 @@ import numpy as np
 
 from swishsync_cv.config import VideoOutputConfig
 from swishsync_cv.data import DetectionRecord, HoopLock, ShotCandidate, SparseBallDetection
-from swishsync_cv.visualization.shot_story_drawing import draw_shot_story
+from swishsync_cv.visualization.shot_story_drawing import draw_pickup_preview, draw_shot_story
 
 BASKETBALL_COLOR = (0, 140, 255)
 HOOP_CANDIDATE_COLOR = (255, 120, 80)
@@ -30,6 +30,7 @@ def render_debug_panel(
     lifecycle_state: str = "idle",
     candidate_point_count: int = 0,
     display_shot: ShotCandidate | None = None,
+    preview_pickup_points: list[SparseBallDetection] | None = None,
 ) -> np.ndarray:
     """Return left panel with original video and debug overlays."""
 
@@ -40,6 +41,8 @@ def render_debug_panel(
         _draw_hoop_lock(panel, hoop_lock, hoop_phase)
     if sparse_point is not None and detection_ran:
         _draw_sparse_detection(panel, sparse_point)
+    if preview_pickup_points and len(preview_pickup_points) >= 2:
+        draw_pickup_preview(panel, preview_pickup_points)
     if collecting_shot is not None and collecting_shot.state == "collecting_shot":
         _draw_collection_preview(panel, collecting_shot, config)
     elif display_shot is not None and display_shot.insufficient_points_for_fit:

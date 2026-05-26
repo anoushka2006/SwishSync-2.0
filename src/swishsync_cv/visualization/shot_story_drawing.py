@@ -16,14 +16,29 @@ from swishsync_cv.tracking.gap_recovery import continuity_track
 from swishsync_cv.tracking.parabola import confidence_tier
 from swishsync_cv.visualization.arc_drawing import draw_finalized_arc
 
-PICKUP_COLOR = (140, 140, 160)
-POST_SHOT_COLOR = (100, 160, 120)
+PICKUP_COLOR = (200, 160, 255)
+POST_SHOT_COLOR = (140, 230, 160)
 GAP_PREDICTED_COLOR = (60, 180, 255)
 RELEASE_COLOR = (255, 220, 120)
 MEASURED_COLOR = (200, 200, 255)
 HIGH_CONF_COLOR = (80, 220, 120)
 MEDIUM_CONF_COLOR = (80, 200, 255)
 LOW_CONF_COLOR = (100, 100, 255)
+PICKUP_DOT_RADIUS = 5
+POST_DOT_RADIUS = 5
+PHASE_PATH_THICKNESS = 2
+PHASE_OUTLINE_COLOR = (255, 255, 255)
+
+
+def draw_pickup_preview(
+    frame: np.ndarray,
+    points: list[SparseBallDetection],
+    *,
+    opacity: float = 1.0,
+) -> None:
+    """Draw idle-phase gather preview before shot collection starts."""
+
+    _draw_pickup_path(frame, points, opacity=opacity)
 
 
 def draw_shot_story(
@@ -56,7 +71,19 @@ def draw_shot_story(
         return
 
     if story is None:
+        _draw_storyless_finalized(
+            frame,
+            shot,
+            opacity=opacity,
+            arc_thickness=arc_thickness,
+        )
         return
+
+    if shot.parabola_fit is not None and not shot.insufficient_points_for_fit:
+        _draw_gap_bridges(frame, shot, story, opacity=opacity)
+        _draw_arc_with_opacity(frame, shot, opacity=opacity, thickness=arc_thickness)
+    else:
+        _draw_measured_continuity_path(frame, shot, opacity=opacity)
 
     if story.show_pickup:
         pickup = [
@@ -68,12 +95,6 @@ def draw_shot_story(
 
     if story.show_post_shot and shot.post_shot_points:
         _draw_post_shot_path(frame, shot.post_shot_points, opacity=opacity)
-
-    if shot.parabola_fit is not None and not shot.insufficient_points_for_fit:
-        _draw_gap_bridges(frame, shot, story, opacity=opacity)
-        _draw_arc_with_opacity(frame, shot, opacity=opacity, thickness=arc_thickness)
-    else:
-        _draw_measured_continuity_path(frame, shot, opacity=opacity)
 
     _draw_release_marker(frame, story.release_xy[0], story.release_xy[1], opacity=opacity)
 
@@ -90,6 +111,49 @@ def draw_shot_story(
         _draw_legend(frame)
 
 
+def _draw_storyless_finalized(
+    frame: np.ndarray,
+    shot: ShotCandidate,
+    *,
+    opacity: float,
+    arc_thickness: int,
+) -> None:
+    """Render-only fallback when story metadata is missing."""
+
+    if shot.parabola_fit is not None and not shot.insufficient_points_for_fit:
+        _draw_arc_with_opacity(frame, shot, opacity=opacity, thickness=arc_thickness)
+        gap_frames = {
+            point.frame_index
+            for point in continuity_track(shot)
+            if effective_point_source(point) == "gap_predicted"
+        }
+        if gap_frames and shot.candidate_points:
+            fallback_story = ShotStoryMetadata(
+                release_frame=shot.candidate_points[0].frame_index,
+                release_xy=(shot.candidate_points[0].x, shot.candidate_points[0].y),
+                flight_start_frame=shot.candidate_points[0].frame_index,
+                flight_end_frame=shot.candidate_points[-1].frame_index,
+                post_shot_start_frame=None,
+                pickup_frames=tuple(),
+                gap_predicted_frames=tuple(sorted(gap_frames)),
+                show_post_shot=False,
+                show_pickup=False,
+            )
+            _draw_gap_bridges(frame, shot, fallback_story, opacity=opacity)
+    else:
+        _draw_measured_continuity_path(frame, shot, opacity=opacity)
+
+    if len(shot.pickup_points) >= 2:
+        _draw_pickup_path(frame, shot.pickup_points, opacity=opacity)
+
+    if len(shot.post_shot_points) >= 2:
+        _draw_post_shot_path(frame, shot.post_shot_points, opacity=opacity)
+
+    if shot.candidate_points:
+        release = shot.candidate_points[0]
+        _draw_release_marker(frame, release.x, release.y, opacity=opacity)
+
+
 def _draw_pickup_path(
     frame: np.ndarray,
     points: list[SparseBallDetection],
@@ -100,15 +164,17 @@ def _draw_pickup_path(
         return
     ordered = sorted(points, key=lambda point: point.frame_index)
     color = _scale_color(PICKUP_COLOR, opacity)
+    outline = _scale_color(PHASE_OUTLINE_COLOR, opacity)
     for point in ordered:
         center = (int(round(point.x)), int(round(point.y)))
-        cv2.circle(frame, center, 3, color, -1)
+        _draw_phase_dot(frame, center, PICKUP_DOT_RADIUS, color, outline)
     for start, end in zip(ordered, ordered[1:]):
         _draw_dotted_line(
             frame,
             (int(round(start.x)), int(round(start.y))),
             (int(round(end.x)), int(round(end.y))),
             color,
+            thickness=PHASE_PATH_THICKNESS,
         )
 
 
@@ -159,15 +225,17 @@ def _draw_post_shot_path(
         return
     ordered = sorted(points, key=lambda point: point.frame_index)
     color = _scale_color(POST_SHOT_COLOR, opacity)
+    outline = _scale_color(PHASE_OUTLINE_COLOR, opacity)
     for point in ordered:
         center = (int(round(point.x)), int(round(point.y)))
-        cv2.circle(frame, center, 3, color, -1)
+        _draw_phase_dot(frame, center, POST_DOT_RADIUS, color, outline)
     for start, end in zip(ordered, ordered[1:]):
         _draw_dotted_line(
             frame,
             (int(round(start.x)), int(round(start.y))),
             (int(round(end.x)), int(round(end.y))),
             color,
+            thickness=PHASE_PATH_THICKNESS,
         )
 
 
@@ -237,6 +305,17 @@ def _draw_gap_bridges(
             (int(round(end.x)), int(round(end.y))),
             color,
         )
+
+
+def _draw_phase_dot(
+    frame: np.ndarray,
+    center: tuple[int, int],
+    radius: int,
+    fill: tuple[int, int, int],
+    outline: tuple[int, int, int],
+) -> None:
+    cv2.circle(frame, center, radius + 1, outline, 1, cv2.LINE_AA)
+    cv2.circle(frame, center, radius, fill, -1, cv2.LINE_AA)
 
 
 def _draw_release_marker(
@@ -366,6 +445,7 @@ def _draw_dotted_line(
     start: tuple[int, int],
     end: tuple[int, int],
     color: tuple[int, int, int],
+    thickness: int = 1,
 ) -> None:
     x1, y1 = start
     x2, y2 = end
@@ -378,4 +458,4 @@ def _draw_dotted_line(
         t1 = min((step + 1) / steps, 1.0)
         p0 = (int(x1 + (x2 - x1) * t0), int(y1 + (y2 - y1) * t0))
         p1 = (int(x1 + (x2 - x1) * t1), int(y1 + (y2 - y1) * t1))
-        cv2.line(frame, p0, p1, color, 1, cv2.LINE_AA)
+        cv2.line(frame, p0, p1, color, thickness, cv2.LINE_AA)

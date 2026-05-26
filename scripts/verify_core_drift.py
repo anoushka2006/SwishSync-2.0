@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PRE = Path("/tmp/swishsync-pre-pr1")
-OUT = ROOT / "outputs" / "core_drift_verify"
+OUT = ROOT / "outputs" / "debug" / "core_drift_verify"
 
 BASELINE_RMSE = {"C": 0.443, "P": 0.91, "R": 0.43, "S": 0.82}
 BASELINE_START = {"C": 66, "P": 92, "R": 24, "S": 79}

@@ -8,7 +8,7 @@ import numpy as np
 from swishsync_cv.config import AnalyticalViewConfig, ShotStoryConfig, VideoOutputConfig
 from swishsync_cv.data import FitDiagnostics, HoopLock, ShotCandidate
 from swishsync_cv.tracking.parabola import confidence_tier
-from swishsync_cv.visualization.shot_story_drawing import GAP_PREDICTED_COLOR, draw_shot_story
+from swishsync_cv.visualization.shot_story_drawing import GAP_PREDICTED_COLOR, draw_pickup_preview, draw_shot_story
 
 PANEL_TITLE = "Shot Trajectory"
 TEXT_COLOR = (235, 235, 235)
@@ -30,6 +30,7 @@ def render_trajectory_panel(
     background_color: tuple[int, int, int] = (24, 24, 28),
     finalized_shots: list[ShotCandidate] | None = None,
     video_config: VideoOutputConfig | None = None,
+    preview_pickup_points: list[SparseBallDetection] | None = None,
 ) -> np.ndarray:
     """Render camera-space collection preview or phased shot lifecycle story."""
 
@@ -40,6 +41,9 @@ def render_trajectory_panel(
     analytical = config.analytical_view
 
     _draw_header(panel, lifecycle_state, candidate_point_count)
+
+    if preview_pickup_points and len(preview_pickup_points) >= 2:
+        draw_pickup_preview(panel, preview_pickup_points)
 
     if hoop_lock is not None and hoop_lock.is_locked:
         center = (int(round(hoop_lock.center_x)), int(round(hoop_lock.center_y)))

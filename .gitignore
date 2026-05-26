@@ -32,6 +32,7 @@ videos/*
 outputs/
 outputs/*
 !outputs/.gitkeep
+!outputs/README.md
 runs/
 tmp/
 temp/

@@ -67,6 +67,27 @@ class ShotCandidateManager:
             return 0
         return len(self.active.candidate_points)
 
+    def preview_pickup_points(self) -> list[SparseBallDetection]:
+        """Render-only gather preview while idle, before collection starts."""
+
+        if self.active is not None:
+            return []
+
+        measured = self._non_floor_measured(
+            self._pre_shot_buffer,
+            self._last_hoop_lock,
+        )
+        if len(measured) < 2:
+            return []
+
+        latest = measured[-1]
+        pickup = [
+            point
+            for point in measured
+            if point.frame_index < latest.frame_index
+        ]
+        return pickup if len(pickup) >= 2 else []
+
     def update(
         self,
         frame_index: int,

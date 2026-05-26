@@ -213,6 +213,22 @@ def test_manager_snapshots_pickup_before_release():
     assert manager.active.start_frame == 62
 
 
+def test_preview_pickup_points_shown_during_idle_release_gap():
+    manager = ShotCandidateManager(ShotCandidateConfig(), frame_height=1920)
+    manager._last_hoop_lock = _hoop()
+    manager._pre_shot_buffer = [
+        SparseBallDetection(59, 0.0, 1033.0, 450.0, 0.8),
+        SparseBallDetection(60, 33.0, 1016.0, 425.0, 0.8),
+        SparseBallDetection(61, 66.0, 1000.0, 403.0, 0.8),
+        SparseBallDetection(62, 99.0, 982.0, 381.0, 0.8),
+    ]
+
+    preview = manager.preview_pickup_points()
+
+    assert [point.frame_index for point in preview] == [59, 60, 61]
+    assert manager.active is None
+
+
 def test_finalize_attaches_story_and_post_shot_points():
     candidate = ShotCandidate(start_frame=62, end_frame=68, state="collecting_shot")
     candidate.candidate_points = _ascending_points()

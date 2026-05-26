@@ -19,14 +19,15 @@ from swishsync_cv.pipeline import run_pipeline
 from swishsync_cv.visualization.overlay import HOOP_LOCK_COLOR
 from scripts.evaluate_testing_clips import (
     CLIP_LABELS,
+    DEFAULT_EVAL_DIR,
     analyze_clip,
     build_markdown,
+    eval_search_dirs,
     processed_video_name,
     slugify,
 )
 
 TESTING_DIR = ROOT / "videos" / "Testing"
-EVAL_DIR = ROOT / "outputs" / "eval"
 
 # Authoritative CORE bbox from drift study; others extracted from baseline overlay.
 BBOX_OVERRIDES: dict[str, tuple[float, float, float, float]] = {
@@ -63,14 +64,19 @@ def extract_bbox_from_video(video_path: Path) -> tuple[float, float, float, floa
     return (float(x1), float(y1), float(x2 - x1), float(y2 - y1))
 
 
-def resolve_hoop_bbox(label: str, filename: str) -> tuple[float, float, float, float]:
+def resolve_hoop_bbox(
+    label: str,
+    filename: str,
+    eval_dir: Path,
+) -> tuple[float, float, float, float]:
     if label in BBOX_OVERRIDES:
         return BBOX_OVERRIDES[label]
     slug = slugify(filename)
-    baseline_video = EVAL_DIR / slug / "processed.mp4"
-    lettered_video = EVAL_DIR / slug / processed_video_name(label)
-    for candidate in (lettered_video, baseline_video):
-        if candidate.exists():
+    for root in eval_search_dirs(eval_dir):
+        for video_name in (processed_video_name(label), "processed.mp4"):
+            candidate = root / slug / video_name
+            if not candidate.exists():
+                continue
             bbox = extract_bbox_from_video(candidate)
             if bbox is not None:
                 return bbox
@@ -113,8 +119,10 @@ def shot_detail(shots: list[dict]) -> dict:
 def run_all(
     only: set[str] | None = None,
     skip_existing: bool = False,
+    eval_dir: Path = DEFAULT_EVAL_DIR,
 ) -> dict:
-    EVAL_DIR.mkdir(parents=True, exist_ok=True)
+    eval_dir = eval_dir.resolve()
+    eval_dir.mkdir(parents=True, exist_ok=True)
     bbox_map: dict[str, tuple[float, float, float, float]] = {}
     run_results: dict[str, dict] = {}
 
@@ -123,7 +131,7 @@ def run_all(
         if only and label not in only:
             continue
         video = TESTING_DIR / filename
-        out_dir = EVAL_DIR / slugify(filename)
+        out_dir = eval_dir / slugify(filename)
         out_dir.mkdir(parents=True, exist_ok=True)
         output_video = out_dir / processed_video_name(label)
         shots_path = out_dir / "shots.json"
@@ -134,7 +142,7 @@ def run_all(
             run_results[label] = shot_detail(shots)
             continue
 
-        bbox = resolve_hoop_bbox(label, filename)
+        bbox = resolve_hoop_bbox(label, filename, eval_dir)
         bbox_map[label] = bbox
 
         print(f"\n>>> Clip {label}: {filename}", flush=True)
@@ -153,18 +161,18 @@ def run_all(
     for filename, label in items:
         if label in run_results:
             continue
-        shots_path = EVAL_DIR / slugify(filename) / "shots.json"
+        shots_path = eval_dir / slugify(filename) / "shots.json"
         if shots_path.exists():
             shots = json.loads(shots_path.read_text())
             run_results[label] = shot_detail(shots)
 
     rows = []
     for filename, label in items:
-        out_dir = EVAL_DIR / slugify(filename)
+        out_dir = eval_dir / slugify(filename)
         rows.append(analyze_clip(out_dir, filename, label))
 
     rows.sort(key=lambda r: r["label"])
-    report_path = EVAL_DIR / "EVAL_SUMMARY.md"
+    report_path = eval_dir / "EVAL_SUMMARY.md"
     report_path.write_text(build_markdown(rows), encoding="utf-8")
 
     zero_shot = {lbl for lbl in BASELINE_ZERO_SHOT if run_results.get(lbl, {}).get("num_shots", 0) > 0}
@@ -176,11 +184,11 @@ def run_all(
         "baseline_zero_shot_count": len(BASELINE_ZERO_SHOT),
         "rows": rows,
     }
-    (EVAL_DIR / "eval_rerun_results.json").write_text(
+    (eval_dir / "eval_rerun_results.json").write_text(
         json.dumps(summary, indent=2), encoding="utf-8"
     )
     print(f"\nWrote {report_path}")
-    print(f"Wrote {EVAL_DIR / 'eval_rerun_results.json'}")
+    print(f"Wrote {eval_dir / 'eval_rerun_results.json'}")
     return summary
 
 
@@ -194,6 +202,12 @@ if __name__ == "__main__":
         action="store_true",
         help="Skip clips that already have processed_<letter>.mp4 and shots.json",
     )
+    parser.add_argument(
+        "--eval-dir",
+        type=Path,
+        default=DEFAULT_EVAL_DIR,
+        help="Evaluation output root (default: outputs/eval/shot_story)",
+    )
     args = parser.parse_args()
     only = {x.upper() for x in args.only} if args.only else None
-    run_all(only=only, skip_existing=args.skip_existing)
+    run_all(only=only, skip_existing=args.skip_existing, eval_dir=args.eval_dir)

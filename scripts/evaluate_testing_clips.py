@@ -12,7 +12,31 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTING_DIR = ROOT / "videos" / "Testing"
-EVAL_DIR = ROOT / "outputs" / "eval"
+EVAL_ROOT = ROOT / "outputs" / "eval"
+DEFAULT_EVAL_DIR = EVAL_ROOT / "shot_story"
+EVAL_BASELINE_DIR = EVAL_ROOT / "baseline"
+EVAL_PR1_DIR = EVAL_ROOT / "pr1"
+EVAL_PR1_TEST_DIR = EVAL_ROOT / "pr1_test"
+
+
+def eval_search_dirs(primary: Path | None = None) -> list[Path]:
+    """Return eval roots to search for prior processed videos (newest first)."""
+
+    ordered = [
+        primary,
+        DEFAULT_EVAL_DIR,
+        EVAL_PR1_DIR,
+        EVAL_BASELINE_DIR,
+        EVAL_PR1_TEST_DIR,
+    ]
+    seen: set[Path] = set()
+    dirs: list[Path] = []
+    for directory in ordered:
+        if directory is None or directory in seen:
+            continue
+        seen.add(directory)
+        dirs.append(directory)
+    return dirs
 
 CLIP_LABELS = {
     "IMG_1962.MOV": "A",
@@ -234,7 +258,16 @@ def main() -> None:
         help="Skip A B C when running (default true)",
     )
     parser.add_argument("--report", action="store_true", help="Write markdown report")
+    parser.add_argument(
+        "--eval-dir",
+        type=Path,
+        default=DEFAULT_EVAL_DIR,
+        help="Evaluation output root (default: outputs/eval/shot_story)",
+    )
     args = parser.parse_args()
+
+    eval_dir = args.eval_dir.resolve()
+    eval_dir.mkdir(parents=True, exist_ok=True)
 
     videos = sorted(TESTING_DIR.iterdir(), key=lambda p: p.name.lower())
     videos = [v for v in videos if v.suffix.lower() in {".mov", ".mp4"}]
@@ -250,7 +283,7 @@ def main() -> None:
         if args.skip_completed and label in {"A", "B", "C"} and args.run:
             continue
 
-        out_dir = EVAL_DIR / slugify(video.name)
+        out_dir = eval_dir / slugify(video.name)
         if args.run:
             code = run_clip(video, out_dir, label)
             if code != 0:
@@ -263,14 +296,13 @@ def main() -> None:
             continue
         if labels_filter and label not in labels_filter:
             continue
-        out_dir = EVAL_DIR / slugify(video.name)
+        out_dir = eval_dir / slugify(video.name)
         rows.append(analyze_clip(out_dir, video.name, label))
 
     rows.sort(key=lambda r: r["label"])
 
     if args.report or not args.run:
-        report_path = EVAL_DIR / "EVAL_SUMMARY.md"
-        EVAL_DIR.mkdir(parents=True, exist_ok=True)
+        report_path = eval_dir / "EVAL_SUMMARY.md"
         report_path.write_text(build_markdown(rows), encoding="utf-8")
         print(f"\nWrote {report_path}")
 

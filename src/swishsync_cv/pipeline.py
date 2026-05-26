@@ -217,6 +217,7 @@ def run_pipeline(
                     lifecycle_state=shot_manager.lifecycle_state,
                     candidate_point_count=shot_manager.candidate_point_count,
                     display_shot=shot_manager.display_shot,
+                    preview_pickup_points=shot_manager.preview_pickup_points(),
                 )
                 right_panel = render_trajectory_panel(
                     frame_size=reader.metadata.frame_size,
@@ -228,6 +229,7 @@ def run_pipeline(
                     background_color=config.video_output.right_panel_background,
                     finalized_shots=shot_manager.finalized_shots,
                     video_config=config.video_output,
+                    preview_pickup_points=shot_manager.preview_pickup_points(),
                 )
                 output_frame = (
                     compose_dual_pane(left_panel, right_panel)
