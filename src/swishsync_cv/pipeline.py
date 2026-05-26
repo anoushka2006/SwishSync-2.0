@@ -261,6 +261,7 @@ def run_pipeline(
                     finalized_shots=shot_manager.finalized_shots,
                     video_config=config.video_output,
                     preview_pickup_points=shot_manager.preview_pickup_points(),
+                    frame_index=packet.index,
                 )
                 output_frame = (
                     compose_dual_pane(left_panel, right_panel)

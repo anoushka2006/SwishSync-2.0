@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 
 from swishsync_cv.config import AnalyticalViewConfig, ShotStoryConfig, VideoOutputConfig
-from swishsync_cv.data import FitDiagnostics, HoopLock, ShotCandidate
+from swishsync_cv.data import FitDiagnostics, HoopLock, ShotCandidate, SparseBallDetection
 from swishsync_cv.tracking.parabola import confidence_tier
 from swishsync_cv.visualization.shot_story_drawing import GAP_PREDICTED_COLOR, draw_pickup_preview, draw_shot_story
 
@@ -18,6 +18,7 @@ HIGH_CONF_COLOR = (80, 220, 120)
 MEDIUM_CONF_COLOR = (80, 200, 255)
 LOW_CONF_COLOR = (100, 100, 255)
 OUTLIER_COLOR = (80, 80, 255)
+NEAR_ACTIVE_PREVIEW_MAX_RELEASE_STALENESS = 1
 
 
 def render_trajectory_panel(
@@ -31,6 +32,7 @@ def render_trajectory_panel(
     finalized_shots: list[ShotCandidate] | None = None,
     video_config: VideoOutputConfig | None = None,
     preview_pickup_points: list[SparseBallDetection] | None = None,
+    frame_index: int | None = None,
 ) -> np.ndarray:
     """Render camera-space collection preview or phased shot lifecycle story."""
 
@@ -42,7 +44,11 @@ def render_trajectory_panel(
 
     _draw_header(panel, lifecycle_state, candidate_point_count)
 
-    if preview_pickup_points and len(preview_pickup_points) >= 2:
+    if _should_draw_idle_pickup_preview(
+        preview_pickup_points,
+        frame_index=frame_index,
+        collecting_shot=collecting_shot,
+    ):
         draw_pickup_preview(panel, preview_pickup_points)
 
     if hoop_lock is not None and hoop_lock.is_locked:
@@ -102,6 +108,26 @@ def render_trajectory_panel(
         )
 
     return panel
+
+
+def _should_draw_idle_pickup_preview(
+    preview_pickup_points: list[SparseBallDetection] | None,
+    *,
+    frame_index: int | None,
+    collecting_shot: ShotCandidate | None,
+    max_release_staleness: int = NEAR_ACTIVE_PREVIEW_MAX_RELEASE_STALENESS,
+) -> bool:
+    """Draw idle gather preview only while release is current on the analytical panel."""
+
+    if collecting_shot is not None:
+        return False
+    if not preview_pickup_points or len(preview_pickup_points) < 2:
+        return False
+    if frame_index is None:
+        return False
+
+    release_frame = max(point.frame_index for point in preview_pickup_points) + 1
+    return frame_index - release_frame <= max_release_staleness
 
 
 def compose_dual_pane(

@@ -11,11 +11,15 @@ from swishsync_cv.tracking.shot_story import _should_show_pickup, compute_shot_s
 from swishsync_cv.utils.serialization import shot_candidate_to_dict, write_finalized_shots_json
 from swishsync_cv.visualization.shot_story_drawing import (
     MEASURED_COLOR,
+    PICKUP_COLOR,
     PICKUP_CONNECTOR_COLOR,
     draw_shot_story,
     pickup_connector_eligible,
 )
-from swishsync_cv.visualization.trajectory_panel import render_trajectory_panel
+from swishsync_cv.visualization.trajectory_panel import (
+    _should_draw_idle_pickup_preview,
+    render_trajectory_panel,
+)
 
 
 def _hoop() -> HoopLock:
@@ -232,6 +236,50 @@ def test_preview_pickup_points_shown_during_idle_release_gap():
 
     assert [point.frame_index for point in preview] == [59, 60, 61]
     assert manager.active is None
+
+
+def test_preview_pickup_points_suppressed_without_clear_release():
+    manager = ShotCandidateManager(ShotCandidateConfig(), frame_height=1920)
+    manager._last_hoop_lock = _hoop()
+    manager._pre_shot_buffer = [
+        SparseBallDetection(146, 0.0, 1387.0, 585.0, 0.47),
+        SparseBallDetection(172, 0.0, 1576.0, 626.0, 0.50),
+        SparseBallDetection(173, 0.0, 1581.0, 622.0, 0.50),
+        SparseBallDetection(174, 0.0, 1587.0, 618.0, 0.52),
+        SparseBallDetection(175, 0.0, 1593.0, 620.0, 0.70),
+    ]
+
+    assert manager.preview_pickup_points() == []
+
+
+def test_preview_pickup_points_use_trailing_cluster_only():
+    manager = ShotCandidateManager(ShotCandidateConfig(), frame_height=1920)
+    manager._last_hoop_lock = _hoop()
+    manager._pre_shot_buffer = [
+        SparseBallDetection(41, 0.0, 885.0, 415.0, 0.72),
+        SparseBallDetection(42, 0.0, 892.0, 387.0, 0.58),
+        SparseBallDetection(43, 0.0, 898.0, 361.0, 0.51),
+        SparseBallDetection(44, 0.0, 906.0, 336.0, 0.27),
+        SparseBallDetection(90, 0.0, 1036.0, 306.0, 0.28),
+        SparseBallDetection(91, 0.0, 1033.0, 333.0, 0.32),
+    ]
+
+    assert manager.preview_pickup_points() == []
+
+
+def test_preview_pickup_points_keeps_consecutive_upward_burst():
+    manager = ShotCandidateManager(ShotCandidateConfig(), frame_height=1920)
+    manager._last_hoop_lock = _hoop()
+    manager._pre_shot_buffer = [
+        SparseBallDetection(41, 0.0, 885.0, 415.0, 0.72),
+        SparseBallDetection(42, 0.0, 892.0, 387.0, 0.58),
+        SparseBallDetection(43, 0.0, 898.0, 361.0, 0.51),
+        SparseBallDetection(44, 0.0, 906.0, 336.0, 0.27),
+    ]
+
+    preview = manager.preview_pickup_points()
+
+    assert [point.frame_index for point in preview] == [41, 42, 43]
 
 
 def test_finalize_attaches_story_and_post_shot_points():
@@ -535,3 +583,77 @@ def test_trajectory_panel_renders_faded_prior_shot():
 
     assert panel.shape == (120, 160, 3)
     assert np.count_nonzero(panel) > 0
+
+
+def test_should_draw_idle_pickup_preview_allows_near_active_release():
+    preview = [
+        SparseBallDetection(75, 0.0, 1101.0, 401.0, 0.8),
+        SparseBallDetection(76, 0.0, 1081.0, 372.0, 0.8),
+    ]
+
+    assert _should_draw_idle_pickup_preview(
+        preview,
+        frame_index=77,
+        collecting_shot=None,
+    )
+
+
+def test_should_draw_idle_pickup_preview_suppresses_stale_zero_shot_cluster():
+    preview = [
+        SparseBallDetection(40, 0.0, 880.0, 444.0, 0.7),
+        SparseBallDetection(41, 0.0, 885.0, 415.0, 0.7),
+        SparseBallDetection(42, 0.0, 892.0, 387.0, 0.6),
+        SparseBallDetection(43, 0.0, 898.0, 361.0, 0.5),
+    ]
+
+    assert not _should_draw_idle_pickup_preview(
+        preview,
+        frame_index=89,
+        collecting_shot=None,
+    )
+
+
+def test_trajectory_panel_shows_near_active_idle_preview():
+    preview = [
+        SparseBallDetection(75, 0.0, 120.0, 80.0, 0.8),
+        SparseBallDetection(76, 0.0, 130.0, 70.0, 0.8),
+    ]
+
+    panel = render_trajectory_panel(
+        frame_size=(240, 160),
+        collecting_shot=None,
+        display_shot=None,
+        hoop_lock=None,
+        lifecycle_state="idle",
+        candidate_point_count=0,
+        preview_pickup_points=preview,
+        frame_index=77,
+    )
+
+    target = np.array(PICKUP_COLOR, dtype=np.int16)
+    patch = panel[70:90, 115:135].reshape(-1, 3).astype(np.int16)
+    assert np.any(np.all(np.abs(patch - target) <= 25, axis=1))
+
+
+def test_trajectory_panel_suppresses_stale_idle_preview():
+    preview = [
+        SparseBallDetection(40, 0.0, 120.0, 80.0, 0.7),
+        SparseBallDetection(41, 0.0, 130.0, 70.0, 0.7),
+        SparseBallDetection(42, 0.0, 140.0, 60.0, 0.6),
+        SparseBallDetection(43, 0.0, 150.0, 50.0, 0.5),
+    ]
+
+    panel = render_trajectory_panel(
+        frame_size=(240, 160),
+        collecting_shot=None,
+        display_shot=None,
+        hoop_lock=None,
+        lifecycle_state="idle",
+        candidate_point_count=0,
+        preview_pickup_points=preview,
+        frame_index=89,
+    )
+
+    target = np.array(PICKUP_COLOR, dtype=np.int16)
+    patch = panel.reshape(-1, 3).astype(np.int16)
+    assert not np.any(np.all(np.abs(patch - target) <= 25, axis=1))
