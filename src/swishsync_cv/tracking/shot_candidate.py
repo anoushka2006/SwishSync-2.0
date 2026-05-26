@@ -88,6 +88,39 @@ class ShotCandidateManager:
         ]
         return pickup if len(pickup) >= 2 else []
 
+    def tracking_context_points(self) -> list[SparseBallDetection]:
+        """Measured points used to predict localized ROI search windows."""
+
+        if self.active is not None:
+            measured = [
+                point
+                for point in self.active.candidate_points
+                if not point.interpolated
+            ]
+            if len(measured) < 2:
+                return []
+            tail = self.config.gap_recovery.gap_predict_tail_points
+            return measured[-tail:]
+
+        measured = self._non_floor_measured(self._pre_shot_buffer, self._last_hoop_lock)
+        if len(measured) < self.config.min_points_to_start:
+            return []
+        if not self._has_clear_new_release(self._pre_shot_buffer):
+            return []
+        return measured[-self.config.gap_recovery.gap_predict_tail_points :]
+
+    def tracking_validation_points(self) -> list[SparseBallDetection]:
+        """Measured points used to validate ROI recovery candidates."""
+
+        if self.active is not None:
+            return [
+                point
+                for point in self.active.candidate_points
+                if not point.interpolated
+            ]
+
+        return self.tracking_context_points()
+
     def update(
         self,
         frame_index: int,

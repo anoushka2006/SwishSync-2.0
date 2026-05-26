@@ -450,6 +450,40 @@ def test_finalized_shot_draws_measured_continuity_with_parabola():
     assert hits >= 3
 
 
+def test_finalized_measured_continuity_clips_to_flight_window():
+    """Post-flight bounce in continuity must not draw after finalize (clip H)."""
+    measured = [
+        SparseBallDetection(58, 0.0, 439.0, 361.0, 0.71),
+        SparseBallDetection(59, 33.0, 481.0, 317.0, 0.84),
+        SparseBallDetection(60, 66.0, 521.0, 277.0, 0.60),
+        SparseBallDetection(61, 99.0, 559.0, 241.0, 0.56),
+        SparseBallDetection(62, 132.0, 594.0, 210.0, 0.36),
+        SparseBallDetection(63, 165.0, 628.0, 181.0, 0.27),
+        SparseBallDetection(66, 231.0, 722.0, 117.0, 0.21),
+    ]
+    bounce = SparseBallDetection(127, 4342.0, 1428.0, 685.0, 0.32)
+    candidate = ShotCandidate(start_frame=58, end_frame=127, state="shot_finalized")
+    candidate.candidate_points = measured + [bounce]
+    candidate.continuity_points = list(measured) + [bounce]
+    candidate = _finalize_with_story(candidate)
+
+    assert candidate.story is not None
+    assert candidate.story.flight_end_frame == 66
+
+    frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    draw_shot_story(frame, candidate)
+
+    target = np.array(MEASURED_COLOR, dtype=np.int16)
+
+    def _has_measured_dot(x: int, y: int) -> bool:
+        patch = frame[y - 2 : y + 3, x - 2 : x + 3].reshape(-1, 3).astype(np.int16)
+        return bool(np.any(np.all(np.abs(patch - target) <= 25, axis=1)))
+
+    apex = measured[-1]
+    assert _has_measured_dot(int(round(apex.x)), int(round(apex.y)))
+    assert not _has_measured_dot(int(round(bounce.x)), int(round(bounce.y)))
+
+
 def test_draw_shot_story_and_panel_do_not_crash():
     candidate = ShotCandidate(start_frame=62, end_frame=68, state="shot_finalized")
     candidate.candidate_points = _ascending_points()

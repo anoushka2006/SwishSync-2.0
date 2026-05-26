@@ -34,6 +34,13 @@ class SparseDetectionConfig:
 
     detection_stride: int = 3
     min_confidence: float = 0.25
+    roi_search_enabled: bool = True
+    roi_padding_px: int = 96
+    roi_min_measured_points: int = 2
+    roi_min_confidence: float = 0.15
+    roi_max_prediction_distance_px: float = 55.0
+    roi_max_frames_since_last_measured: int = 6
+    floor_band_rejection_enabled: bool = True
 
 
 @dataclass(frozen=True)

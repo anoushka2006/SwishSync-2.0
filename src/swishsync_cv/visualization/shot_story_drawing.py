@@ -92,9 +92,9 @@ def draw_shot_story(
     if shot.parabola_fit is not None and not shot.insufficient_points_for_fit:
         _draw_gap_bridges(frame, shot, story, opacity=opacity)
         _draw_arc_with_opacity(frame, shot, opacity=opacity, thickness=arc_thickness)
-        _draw_measured_continuity_path(frame, shot, opacity=opacity)
+        _draw_measured_continuity_path(frame, shot, opacity=opacity, story=story)
     else:
-        _draw_measured_continuity_path(frame, shot, opacity=opacity)
+        _draw_measured_continuity_path(frame, shot, opacity=opacity, story=story)
 
     if story.show_pickup:
         pickup = [
@@ -147,6 +147,7 @@ def _draw_storyless_finalized(
             for point in continuity_track(shot)
             if effective_point_source(point) == "gap_predicted"
         }
+        fallback_story = None
         if gap_frames and shot.candidate_points:
             fallback_story = ShotStoryMetadata(
                 release_frame=shot.candidate_points[0].frame_index,
@@ -160,7 +161,7 @@ def _draw_storyless_finalized(
                 show_pickup=False,
             )
             _draw_gap_bridges(frame, shot, fallback_story, opacity=opacity)
-        _draw_measured_continuity_path(frame, shot, opacity=opacity)
+        _draw_measured_continuity_path(frame, shot, opacity=opacity, story=fallback_story)
     else:
         _draw_measured_continuity_path(frame, shot, opacity=opacity)
 
@@ -393,8 +394,15 @@ def _draw_measured_continuity_path(
     shot: ShotCandidate,
     *,
     opacity: float,
+    story: ShotStoryMetadata | None = None,
 ) -> None:
     points = continuity_track(shot)
+    if story is not None:
+        points = [
+            point
+            for point in points
+            if story.flight_start_frame <= point.frame_index <= story.flight_end_frame
+        ]
     if not points:
         return
 

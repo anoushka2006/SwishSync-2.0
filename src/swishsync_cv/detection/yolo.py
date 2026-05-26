@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from dataclasses import replace
+
 import numpy as np
 
 from swishsync_cv.config import DetectionConfig
@@ -99,18 +101,78 @@ class YoloObjectDetector:
     ) -> list[DetectionRecord]:
         """Run YOLOv8 on one frame and return normalized detections."""
 
+        return self._predict(
+            frame=frame,
+            frame_index=frame_index,
+            timestamp_ms=timestamp_ms,
+            confidence_threshold=self.config.confidence_threshold,
+            bbox_offset=(0.0, 0.0),
+        )
+
+    def detect_crop(
+        self,
+        frame: np.ndarray,
+        crop_xyxy: tuple[int, int, int, int],
+        frame_index: int,
+        timestamp_ms: float,
+        min_confidence: float | None = None,
+    ) -> list[DetectionRecord]:
+        """Run YOLOv8 on a crop and return detections in full-frame coordinates."""
+
+        x1, y1, x2, y2 = crop_xyxy
+        crop = frame[y1:y2, x1:x2]
+        if crop.size == 0:
+            return []
+
+        return self._predict(
+            frame=crop,
+            frame_index=frame_index,
+            timestamp_ms=timestamp_ms,
+            confidence_threshold=(
+                min_confidence
+                if min_confidence is not None
+                else self.config.confidence_threshold
+            ),
+            bbox_offset=(float(x1), float(y1)),
+        )
+
+    def _predict(
+        self,
+        frame: np.ndarray,
+        frame_index: int,
+        timestamp_ms: float,
+        confidence_threshold: float,
+        bbox_offset: tuple[float, float],
+    ) -> list[DetectionRecord]:
         results = self.model.predict(
             source=frame,
-            conf=self.config.confidence_threshold,
+            conf=confidence_threshold,
             iou=self.config.iou_threshold,
             device=self.config.device,
             verbose=False,
         )
         if not results:
             return []
-        return detections_from_yolo_result(
+
+        records = detections_from_yolo_result(
             result=results[0],
             frame_index=frame_index,
             timestamp_ms=timestamp_ms,
             config=self.config,
         )
+        if bbox_offset == (0.0, 0.0):
+            return records
+
+        offset_x, offset_y = bbox_offset
+        return [
+            replace(
+                record,
+                bbox_xyxy=(
+                    record.bbox_xyxy[0] + offset_x,
+                    record.bbox_xyxy[1] + offset_y,
+                    record.bbox_xyxy[2] + offset_x,
+                    record.bbox_xyxy[3] + offset_y,
+                ),
+            )
+            for record in records
+        ]

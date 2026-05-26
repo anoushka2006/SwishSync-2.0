@@ -12,6 +12,8 @@ import cv2
 from swishsync_cv.config import PipelineConfig
 from swishsync_cv.data import DetectionRecord, FrameDetections, SparseBallDetection
 from swishsync_cv.detection import YoloObjectDetector
+from swishsync_cv.detection.ball_detection_gates import filter_basketball_detections
+from swishsync_cv.detection.ball_roi_search import try_roi_ball_detection
 from swishsync_cv.io import VideoReader, VideoWriter
 from swishsync_cv.tracking.hoop_lock import HoopLockTracker
 from swishsync_cv.tracking.hoop_selection import select_hoop_bbox_interactive
@@ -142,6 +144,12 @@ def run_pipeline(
                         frame_index=packet.index,
                         timestamp_ms=packet.timestamp_ms,
                     )
+                    detections = filter_basketball_detections(
+                        detections,
+                        hoop_lock=hoop_tracker.lock,
+                        floor_margin_px=config.shot_candidate.floor_below_rim_margin_px,
+                        enabled=config.sparse_detection.floor_band_rejection_enabled,
+                    )
                     frame_records.append(
                         FrameDetections(
                             frame_index=packet.index,
@@ -156,6 +164,29 @@ def run_pipeline(
                         timestamp_ms=packet.timestamp_ms,
                         detections=detections,
                     )
+                    if sparse_point is None:
+                        tracking_points = shot_manager.tracking_context_points()
+                        validation_points = shot_manager.tracking_validation_points()
+                        if tracking_points and hasattr(active_detector, "detect_crop"):
+                            roi_point = try_roi_ball_detection(
+                                frame=packet.image,
+                                frame_index=packet.index,
+                                timestamp_ms=packet.timestamp_ms,
+                                recent_points=tracking_points,
+                                validation_points=validation_points,
+                                detect_crop=active_detector.detect_crop,
+                                sparse_config=config.sparse_detection,
+                                detection_config=config.detection,
+                                shot_config=config.shot_candidate,
+                            )
+                            if roi_point is not None:
+                                sparse_point = roi_point
+                                sparse_buffer.register_detection(roi_point)
+                                logger.info(
+                                    "ROI ball recovery frame=%s conf=%.2f",
+                                    packet.index,
+                                    roi_point.confidence,
+                                )
                     if sparse_point is None and collecting:
                         sparse_point = sparse_buffer.interpolate_at(
                             frame_index=packet.index,

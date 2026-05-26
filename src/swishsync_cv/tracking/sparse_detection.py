@@ -53,6 +53,11 @@ class SparseBallDetectionBuffer:
         self.detections.append(point)
         return point
 
+    def register_detection(self, point: SparseBallDetection) -> None:
+        """Record an externally recovered measured detection."""
+
+        self.detections.append(point)
+
     def interpolate_at(self, frame_index: int, timestamp_ms: float) -> SparseBallDetection | None:
         """Linearly infer ball position between the two nearest sparse detections."""
 
