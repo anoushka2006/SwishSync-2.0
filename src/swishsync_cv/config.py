@@ -85,10 +85,23 @@ class GapRecoveryConfig:
 
 
 @dataclass(frozen=True)
+class TrustedFlightConfig:
+    """Thresholds for pre-fit trusted flight point selection.
+
+    Defines the primary contiguous cluster boundary used by
+    select_trusted_flight_points(). Kept separate from reacquisition_gap_frames
+    so each threshold's CORE impact can be measured in isolation.
+    """
+
+    max_flight_gap_frames: int = 10
+
+
+@dataclass(frozen=True)
 class ShotCandidateConfig:
     """Heuristic thresholds for shot start/end and motion validation."""
 
     gap_recovery: GapRecoveryConfig = field(default_factory=GapRecoveryConfig)
+    trusted_flight: TrustedFlightConfig = field(default_factory=TrustedFlightConfig)
     min_points_to_start: int = 3
     upward_velocity_threshold: float = 2.0
     upper_body_y_ratio: float = 0.55

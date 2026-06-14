@@ -13,6 +13,7 @@ ShotLifecycleState = Literal["idle", "collecting_shot", "shot_finalized"]
 ShotFinalizeReason = Literal["post_rim", "horizontal_jump", "idle", "end_of_video", "unknown"]
 ShotMotionDirection = Literal["ascending", "descending", "unknown"]
 PointSource = Literal["measured", "sparse_linear", "gap_predicted"]
+TrustedFlightExclusionReason = Literal["gap_predicted", "floor_bounce", "post_cluster"]
 
 
 @dataclass(frozen=True)
@@ -223,6 +224,28 @@ class ArcRenderMetadata:
 
 
 @dataclass(frozen=True)
+class TrustedFlightExclusion:
+    """A candidate point excluded from trusted flight selection with its reason."""
+
+    point: SparseBallDetection
+    reason: TrustedFlightExclusionReason
+
+
+@dataclass(frozen=True)
+class TrustedFlightSelection:
+    """Result of pre-fit trusted flight point selection.
+
+    Computed from candidate_points before fitting. NOT read by the fitter,
+    confidence scorer, story, or render modules in Phase 0 — stored only for
+    observability and future Phase 2 wiring.
+    """
+
+    trusted: tuple[SparseBallDetection, ...]
+    excluded: tuple[TrustedFlightExclusion, ...]
+    max_gap_frames: int
+
+
+@dataclass(frozen=True)
 class ShotStoryMetadata:
     """Render-only phase boundaries for shot lifecycle visualization."""
 
@@ -235,6 +258,8 @@ class ShotStoryMetadata:
     gap_predicted_frames: tuple[int, ...]
     show_post_shot: bool
     show_pickup: bool
+    trajectory_incomplete: bool = False
+    max_measured_gap_frames: int | None = None
 
 
 @dataclass
@@ -261,6 +286,7 @@ class ShotCandidate:
     excluded_debug_points: list[SparseBallDetection] = field(default_factory=list)
     arc_render: ArcRenderMetadata | None = None
     story: ShotStoryMetadata | None = None
+    trusted_flight_debug: TrustedFlightSelection | None = None
 
     @property
     def raw_points(self) -> list[SparseBallDetection]:

@@ -10,9 +10,11 @@ from swishsync_cv.tracking.arc_render import compute_arc_render_metadata
 from swishsync_cv.tracking.confidence import score_shot_confidence
 from swishsync_cv.tracking.parabola import (
     fit_weighted_parabola_robust,
+    select_contiguous_flight_cluster,
     select_flight_fit_points,
 )
 from swishsync_cv.tracking.shot_story import compute_shot_story
+from swishsync_cv.tracking.trusted_flight import select_trusted_flight_points
 
 logger = logging.getLogger("swishsync_cv.shot")
 
@@ -39,11 +41,15 @@ def finalize_shot(
     candidate.insufficient_points_for_fit = False
 
     measured_count = len(candidate.candidate_points)
+    flight_cluster = select_contiguous_flight_cluster(
+        candidate.candidate_points,
+        max_gap_frames=config.reacquisition_gap_frames,
+    )
     fit_points: list = []
     excluded_for_fit: list = []
-    if measured_count >= config.min_measured_points_for_fit:
+    if len(flight_cluster) >= config.min_measured_points_for_fit:
         fit_points, excluded_for_fit = select_flight_fit_points(
-            candidate.candidate_points,
+            flight_cluster,
             hoop_lock,
             floor_margin_px=config.floor_below_rim_margin_px,
         )
@@ -53,14 +59,6 @@ def finalize_shot(
             logger.info(
                 "flight fit excluded floor/bounce frames=%s",
                 [point.frame_index for point in excluded_for_fit],
-            )
-
-        if len(fit_points) < config.min_measured_points_for_fit:
-            fit_points = list(candidate.candidate_points)
-            excluded_for_fit = []
-            logger.info(
-                "flight subset too small (%s); falling back to all candidate points",
-                len(fit_points),
             )
 
         rim_anchor = None
@@ -106,6 +104,11 @@ def finalize_shot(
                     candidate.arc_render.render_x_range[0],
                     candidate.arc_render.render_x_range[1],
                 )
+        elif len(fit_points) >= 3:
+            logger.info(
+                "parabola fit skipped usable flight points=%s after floor filter",
+                len(fit_points),
+            )
     elif measured_count > 0:
         candidate.insufficient_points_for_fit = True
         logger.info(
@@ -148,6 +151,12 @@ def finalize_shot(
     else:
         logger.info("parabola fit skipped (not enough usable points)")
 
+    candidate.trusted_flight_debug = select_trusted_flight_points(
+        candidate.candidate_points,
+        hoop_lock,
+        config.trusted_flight,
+        floor_margin_px=config.floor_below_rim_margin_px,
+    )
     candidate.state = "shot_finalized"
     candidate.story = compute_shot_story(
         candidate,

@@ -19,6 +19,7 @@ from swishsync_cv.data import (
     ShotStoryMetadata,
     SparseBallDetection,
     TrajectoryPoint,
+    TrustedFlightSelection,
     effective_point_source,
 )
 
@@ -192,6 +193,21 @@ def shot_story_to_dict(story: ShotStoryMetadata) -> dict[str, object]:
         "gap_predicted_frames": list(story.gap_predicted_frames),
         "show_post_shot": story.show_post_shot,
         "show_pickup": story.show_pickup,
+        "trajectory_incomplete": story.trajectory_incomplete,
+        "max_measured_gap_frames": story.max_measured_gap_frames,
+    }
+
+
+def trusted_flight_selection_to_dict(selection: TrustedFlightSelection) -> dict[str, object]:
+    return {
+        "trusted": [sparse_detection_to_dict(p) for p in selection.trusted],
+        "excluded": [
+            {"point": sparse_detection_to_dict(e.point), "reason": e.reason}
+            for e in selection.excluded
+        ],
+        "max_gap_frames": selection.max_gap_frames,
+        "trusted_count": len(selection.trusted),
+        "excluded_count": len(selection.excluded),
     }
 
 
@@ -252,6 +268,11 @@ def shot_candidate_to_dict(candidate: ShotCandidate) -> dict[str, object]:
         "story": (
             shot_story_to_dict(candidate.story)
             if candidate.story is not None
+            else None
+        ),
+        "trusted_flight": (
+            trusted_flight_selection_to_dict(candidate.trusted_flight_debug)
+            if candidate.trusted_flight_debug is not None
             else None
         ),
     }
