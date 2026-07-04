@@ -12,6 +12,7 @@ from swishsync_cv.data import (
     is_measured_detection,
 )
 from swishsync_cv.tracking.gap_recovery import continuity_track
+from swishsync_cv.tracking.parabola import analyze_trajectory_completeness
 
 
 def score_shot_confidence(candidate: ShotCandidate) -> ConfidenceScores:
@@ -30,6 +31,7 @@ def score_shot_confidence(candidate: ShotCandidate) -> ConfidenceScores:
         points=points,
         parabola_fit=candidate.parabola_fit,
         fit_diagnostics=candidate.fit_diagnostics,
+        trajectory_incomplete=analyze_trajectory_completeness(points)[0],
     )
     overall_confidence = 0.40 * detection_confidence + 0.60 * trajectory_confidence
     return ConfidenceScores(
@@ -56,6 +58,7 @@ def _trajectory_confidence(
     points: list[SparseBallDetection],
     parabola_fit: ParabolaFit | None,
     fit_diagnostics: FitDiagnostics | None,
+    trajectory_incomplete: bool = False,
 ) -> float:
     if len(points) < 3 or parabola_fit is None or fit_diagnostics is None:
         return 0.0
@@ -76,6 +79,8 @@ def _trajectory_confidence(
         + 0.10 * continuity
         + 0.10 * outlier_penalty
     )
+    if trajectory_incomplete:
+        score *= 0.80
     return max(0.0, min(1.0, score))
 
 

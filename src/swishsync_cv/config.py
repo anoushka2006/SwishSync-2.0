@@ -15,6 +15,7 @@ class DetectionConfig:
     """
 
     model_path: str = "yolov8n.pt"
+    hoop_model_path: str | None = None
     confidence_threshold: float = 0.25
     iou_threshold: float = 0.45
     device: str = "cpu"

@@ -532,6 +532,84 @@ def test_finalized_measured_continuity_clips_to_flight_window():
     assert not _has_measured_dot(int(round(bounce.x)), int(round(bounce.y)))
 
 
+def test_long_gap_measured_continuity_skips_chord():
+    """B-like clip: do not draw measured chord across a 23-frame reacquisition gap."""
+    measured = [
+        SparseBallDetection(
+            frame_index,
+            float(frame_index * 33),
+            786.0 - frame_index * 40.0,
+            266.0 - frame_index * 3.0,
+            0.66,
+        )
+        for frame_index in range(8)
+    ]
+    late = SparseBallDetection(31, 1033.0, 472.0, 510.0, 0.30)
+    candidate = ShotCandidate(start_frame=0, end_frame=31, state="shot_finalized")
+    candidate.candidate_points = measured + [late]
+    candidate.continuity_points = list(candidate.candidate_points)
+    candidate = _finalize_with_story(candidate)
+
+    assert candidate.story is not None
+    assert candidate.story.flight_end_frame <= 7
+    assert candidate.story.trajectory_incomplete is True
+    assert candidate.story.max_measured_gap_frames == 24
+
+    frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    draw_shot_story(frame, candidate, show_flight_dots=False)
+
+    target = np.array(MEASURED_COLOR, dtype=np.int16)
+    start = measured[-1]
+    end = late
+
+    def _segment_has_measured_line(x0: int, y0: int, x1: int, y1: int) -> bool:
+        samples = max(abs(x1 - x0), abs(y1 - y0), 1)
+        for step in range(1, samples):
+            t = step / samples
+            if t < 0.15 or t > 0.85:
+                continue
+            x = int(round(x0 + (x1 - x0) * t))
+            y = int(round(y0 + (y1 - y0) * t))
+            patch = frame[y - 1 : y + 2, x - 1 : x + 2].reshape(-1, 3).astype(np.int16)
+            if np.any(np.all(np.abs(patch - target) <= 25, axis=1)):
+                return True
+        return False
+
+    assert not _segment_has_measured_line(
+        int(round(start.x)),
+        int(round(start.y)),
+        int(round(end.x)),
+        int(round(end.y)),
+    )
+
+
+def test_incomplete_trajectory_lowers_confidence():
+    complete = ShotCandidate(start_frame=0, end_frame=4, state="collecting_shot")
+    complete.candidate_points = [
+        SparseBallDetection(0, 0.0, 786.0, 266.0, 0.66),
+        SparseBallDetection(1, 33.0, 761.0, 255.0, 0.55),
+        SparseBallDetection(2, 66.0, 700.0, 280.0, 0.70),
+        SparseBallDetection(3, 99.0, 650.0, 320.0, 0.65),
+        SparseBallDetection(4, 132.0, 600.0, 360.0, 0.60),
+    ]
+    incomplete = ShotCandidate(start_frame=0, end_frame=31, state="collecting_shot")
+    incomplete.candidate_points = list(complete.candidate_points) + [
+        SparseBallDetection(31, 1033.0, 472.0, 510.0, 0.30),
+    ]
+
+    complete_final = finalize_shot(complete, ShotCandidateConfig(), hoop_lock=_hoop())
+    incomplete_final = finalize_shot(incomplete, ShotCandidateConfig(), hoop_lock=_hoop())
+
+    assert complete_final.confidence is not None
+    assert incomplete_final.confidence is not None
+    assert incomplete_final.story is not None
+    assert incomplete_final.story.trajectory_incomplete is True
+    assert (
+        incomplete_final.confidence.trajectory_confidence
+        < complete_final.confidence.trajectory_confidence
+    )
+
+
 def test_draw_shot_story_and_panel_do_not_crash():
     candidate = ShotCandidate(start_frame=62, end_frame=68, state="shot_finalized")
     candidate.candidate_points = _ascending_points()

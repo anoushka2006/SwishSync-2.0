@@ -41,6 +41,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="YOLOv8 model path/name. Use custom weights for hoop detection.",
     )
     parser.add_argument(
+        "--hoop-model",
+        default=None,
+        help="Optional hoop-only YOLO weights for automatic hoop lock (e.g. models/hoop_ball_yolov8.pt).",
+    )
+    parser.add_argument(
         "--confidence",
         default=0.25,
         type=float,
@@ -108,6 +113,7 @@ def main() -> None:
         output_video_name=args.output_video_name,
         detection=DetectionConfig(
             model_path=args.model,
+            hoop_model_path=args.hoop_model,
             confidence_threshold=args.confidence,
             iou_threshold=args.iou,
             device="cpu",

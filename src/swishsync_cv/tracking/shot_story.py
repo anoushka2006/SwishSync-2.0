@@ -5,7 +5,10 @@ from __future__ import annotations
 from swishsync_cv.config import ShotCandidateConfig, ShotStoryConfig
 from swishsync_cv.data import HoopLock, ShotCandidate, ShotStoryMetadata, SparseBallDetection, effective_point_source
 from swishsync_cv.tracking.gap_recovery import continuity_track
-from swishsync_cv.tracking.parabola import is_floor_bounce_point
+from swishsync_cv.tracking.parabola import (
+    analyze_trajectory_completeness,
+    is_floor_bounce_point,
+)
 
 
 def compute_shot_story(
@@ -24,11 +27,16 @@ def compute_shot_story(
 
     release = measured[0]
     release_frame = release.frame_index
-    flight_start = release_frame
-    flight_end = (
-        fit_points[-1].frame_index
-        if fit_points
-        else measured[-1].frame_index
+    trusted = candidate.trusted_flight_debug
+    if trusted is not None and trusted.trusted:
+        flight_start = trusted.flight_start_frame
+        flight_end = trusted.flight_end_frame
+    else:
+        flight_start = release_frame
+        flight_end = _flight_end_frame(candidate, fit_points, measured)
+    trajectory_incomplete, max_measured_gap = analyze_trajectory_completeness(
+        measured,
+        max_gap_frames=config.reacquisition_gap_frames,
     )
 
     pickup_frames = tuple(
@@ -72,7 +80,28 @@ def compute_shot_story(
         gap_predicted_frames=gap_frames,
         show_post_shot=show_post_shot,
         show_pickup=show_pickup,
+        trajectory_incomplete=trajectory_incomplete,
+        max_measured_gap_frames=max_measured_gap,
     )
+
+
+def _flight_end_frame(
+    candidate: ShotCandidate,
+    fit_points: list[SparseBallDetection],
+    measured: list[SparseBallDetection],
+) -> int:
+    if candidate.fit_diagnostics is not None:
+        fitted_frames = [
+            point.frame_index
+            for point in candidate.fit_diagnostics.points
+            if point.used_in_fit and point.frame_index >= 0
+        ]
+        if fitted_frames:
+            return max(fitted_frames)
+
+    if fit_points:
+        return fit_points[-1].frame_index
+    return measured[-1].frame_index
 
 
 def _empty_story() -> ShotStoryMetadata:
@@ -86,6 +115,8 @@ def _empty_story() -> ShotStoryMetadata:
         gap_predicted_frames=tuple(),
         show_post_shot=False,
         show_pickup=False,
+        trajectory_incomplete=False,
+        max_measured_gap_frames=None,
     )
 
 

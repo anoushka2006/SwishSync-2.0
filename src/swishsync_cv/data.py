@@ -235,14 +235,43 @@ class TrustedFlightExclusion:
 class TrustedFlightSelection:
     """Result of pre-fit trusted flight point selection.
 
-    Computed from candidate_points before fitting. NOT read by the fitter,
-    confidence scorer, story, or render modules in Phase 0 — stored only for
-    observability and future Phase 2 wiring.
+    Computed from candidate_points before fitting. NOT read by the fitter or
+    confidence scorer. Phase 1: the shot story sources its render-only flight
+    window from this selection. Phase 2 (future) gates wiring it into the fit.
     """
 
     trusted: tuple[SparseBallDetection, ...]
     excluded: tuple[TrustedFlightExclusion, ...]
     max_gap_frames: int
+
+    @property
+    def flight_start_frame(self) -> int | None:
+        return self.trusted[0].frame_index if self.trusted else None
+
+    @property
+    def flight_end_frame(self) -> int | None:
+        return self.trusted[-1].frame_index if self.trusted else None
+
+
+ShotOutcomeVerdict = Literal["make", "miss", "unknown"]
+
+
+@dataclass(frozen=True)
+class ShotOutcome:
+    """Make/miss classification from measured rim-plane crossings.
+
+    Render/observability only — computed after fit and confidence in
+    finalize_shot() and never read by fit, confidence, story, or lifecycle.
+    The last downward crossing of the rim line decides the verdict; no
+    observed crossing yields an honest "unknown".
+    """
+
+    verdict: ShotOutcomeVerdict
+    crossing_frame: int | None = None
+    crossing_x: float | None = None
+    rim_x_span: tuple[float, float] | None = None
+    margin_ratio: float | None = None
+    method: Literal["measured", "fit"] | None = None
 
 
 @dataclass(frozen=True)
@@ -287,6 +316,7 @@ class ShotCandidate:
     arc_render: ArcRenderMetadata | None = None
     story: ShotStoryMetadata | None = None
     trusted_flight_debug: TrustedFlightSelection | None = None
+    outcome: ShotOutcome | None = None
 
     @property
     def raw_points(self) -> list[SparseBallDetection]:

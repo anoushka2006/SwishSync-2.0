@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Protocol
 
@@ -69,6 +69,11 @@ def run_pipeline(
         config.debug_frames_dir.mkdir(parents=True, exist_ok=True)
 
     active_detector = detector or YoloObjectDetector(config.detection)
+    hoop_detector: YoloObjectDetector | None = None
+    if config.detection.hoop_model_path is not None:
+        hoop_detector = YoloObjectDetector(
+            replace(config.detection, model_path=config.detection.hoop_model_path)
+        )
     sparse_buffer = SparseBallDetectionBuffer(config.sparse_detection)
     hoop_tracker = HoopLockTracker(config.hoop_lock)
 
@@ -204,6 +209,21 @@ def run_pipeline(
                         for detection in detections
                         if detection.label == "hoop"
                     ]
+                    # ponytail: hoop model only runs pre-lock/revalidation; once
+                    # locked, existing color+geometry revalidation carries it.
+                    if hoop_detector is not None and (
+                        not hoop_tracker.is_locked
+                        or hoop_tracker.phase == "revalidation"
+                    ):
+                        yolo_hoops.extend(
+                            detection
+                            for detection in hoop_detector.detect(
+                                frame=packet.image,
+                                frame_index=packet.index,
+                                timestamp_ms=packet.timestamp_ms,
+                            )
+                            if detection.label == "hoop"
+                        )
                     hoop_tracker.update(
                         frame_index=packet.index,
                         frame=packet.image,

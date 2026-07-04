@@ -123,3 +123,36 @@ python scripts/evaluate_testing_clips.py --report --eval-dir outputs/eval/pr1
 ```
 
 Hoop bbox extraction for reruns searches, in order: the active `--eval-dir`, then `shot_story`, `pr1`, `baseline`, and `pr1_test`.
+
+## Eval browser (local review)
+
+After a full eval (or any run that populates per-clip folders), create browser-safe preview encodes and build the HTML index:
+
+```bash
+python scripts/prepare_eval_browser_videos.py
+python scripts/build_eval_browser.py
+# optional: --eval-dir outputs/eval/my_experiment on both commands
+```
+
+`prepare_eval_browser_videos.py` writes `preview_<letter>.mp4` (H.264 + AAC via ffmpeg) next to each `processed_<letter>.mp4` without modifying pipeline outputs. If ffmpeg is missing, it prints install instructions.
+
+Output:
+
+```text
+outputs/eval/shot_story/index.html
+outputs/eval/shot_story/IMG_1962/preview_a.mp4
+```
+
+Serve from the **repo root** so embedded videos play reliably:
+
+```bash
+python -m http.server 8000
+```
+
+Then open:
+
+```text
+http://localhost:8000/outputs/eval/shot_story/index.html
+```
+
+The page embeds `preview_<letter>.mp4` when available (fallback: original processed video), keeps links to the full `processed_<letter>.mp4`, and lists shot metrics, notes, and artifact links. Regenerate previews and the index after rerunning eval clips.

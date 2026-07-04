@@ -74,6 +74,24 @@ Exclusion reasons: `"gap_predicted"`, `"post_cluster"`, `"floor_bounce"`.
 
 ---
 
+## Phase 1 — story-window alignment (✅ done 2026-07-03, render-only)
+
+`compute_shot_story()` sources `flight_start_frame` / `flight_end_frame` from
+`candidate.trusted_flight_debug` (`flight_start_frame` / `flight_end_frame`
+derived properties on `TrustedFlightSelection`) instead of
+`candidate_points[0]` / the fit window. Falls back to the previous behavior
+when `trusted_flight_debug` is `None` or its trusted tuple is empty.
+
+**Fit impact: zero, verified.** On the 10-clip real eval (CORE A/C/P/R/S +
+STRESS B/E/G/I/K), `parabola_fit`, `fit_diagnostics`, and `confidence` JSON
+blocks are byte-identical before/after, and CORE story windows are unchanged.
+The discriminating case — a measured gap of 11–15 frames, where the fit
+cluster (gap ≤ 15) spans the gap but trusted (gap ≤ 10) stops at the break —
+is covered by `tests/test_trusted_flight_story.py`; no clip in the current
+suite has a gap in that band (real gaps are ≤ 3 or ≥ 24 frames).
+
+---
+
 ## Phase 2 gate — wiring trusted_flight_points into the fitter
 
 **Do not proceed to Phase 2 until all of the following are true:**

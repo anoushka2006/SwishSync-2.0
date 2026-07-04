@@ -323,6 +323,12 @@ def _draw_fit_diagnostics_hud(
             )
     if display_shot.story is not None:
         lines.append(f"release f{display_shot.story.release_frame}")
+        if display_shot.story.trajectory_incomplete:
+            gap = display_shot.story.max_measured_gap_frames
+            if gap is not None:
+                lines.append(f"INCOMPLETE — mid-flight gap {gap}f")
+            else:
+                lines.append("INCOMPLETE — mid-flight gap")
 
     y_offset = 76
     for line in lines[:6]:

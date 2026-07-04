@@ -1,8 +1,10 @@
 from swishsync_cv.config import HoopLockConfig, ShotCandidateConfig
 from swishsync_cv.data import HoopLock, ShotCandidate, SparseBallDetection
 from swishsync_cv.tracking.parabola import (
+    analyze_trajectory_completeness,
     fit_weighted_parabola_robust,
     is_floor_bounce_point,
+    select_contiguous_flight_cluster,
     select_flight_fit_points,
 )
 from swishsync_cv.tracking.shot_candidate import ShotCandidateManager
@@ -108,3 +110,57 @@ def test_is_floor_bounce_point():
     hoop = _hoop()
     assert is_floor_bounce_point(SparseBallDetection(0, 0.0, 500.0, 520.0, 0.5), hoop, 100.0)
     assert not is_floor_bounce_point(SparseBallDetection(0, 0.0, 500.0, 430.0, 0.5), hoop, 100.0)
+
+
+def test_select_contiguous_flight_cluster_stops_at_long_gap():
+    points = [
+        SparseBallDetection(frame_index, 0.0, 100.0 + frame_index, 300.0 - frame_index, 0.8)
+        for frame_index in range(8)
+    ] + [SparseBallDetection(31, 0.0, 472.0, 510.0, 0.30)]
+
+    cluster = select_contiguous_flight_cluster(points, max_gap_frames=15)
+
+    assert [point.frame_index for point in cluster] == list(range(8))
+    incomplete, split_gap = analyze_trajectory_completeness(points, max_gap_frames=15)
+    assert incomplete is True
+    assert split_gap == 24
+
+
+def test_contiguous_cluster_fit_excludes_post_gap_frame():
+    points = [
+        SparseBallDetection(frame_index, 0.0, 100.0 + frame_index * 10.0, 300.0 - frame_index * 5.0, 0.9)
+        for frame_index in range(8)
+    ] + [SparseBallDetection(31, 0.0, 472.0, 510.0, 0.30)]
+    cluster = select_contiguous_flight_cluster(points, max_gap_frames=15)
+    result = fit_weighted_parabola_robust(cluster)
+    assert result is not None
+    _, diagnostics = result
+    fitted_frames = [
+        point.frame_index
+        for point in diagnostics.points
+        if point.used_in_fit and point.frame_index >= 0
+    ]
+    assert 31 not in fitted_frames
+    assert max(fitted_frames) <= 7
+
+
+def test_story_flight_end_uses_last_fitted_frame_not_bounce():
+    candidate = ShotCandidate(start_frame=55, end_frame=59, state="collecting_shot")
+    candidate.candidate_points = [
+        SparseBallDetection(55, 0.0, 439.0, 361.0, 0.71),
+        SparseBallDetection(56, 33.0, 481.0, 317.0, 0.84),
+        SparseBallDetection(57, 66.0, 521.0, 277.0, 0.60),
+        SparseBallDetection(58, 99.0, 559.0, 241.0, 0.56),
+        SparseBallDetection(59, 132.0, 1428.0, 685.0, 0.32),
+    ]
+    candidate.continuity_points = list(candidate.candidate_points)
+
+    finalized = finalize_shot(
+        candidate,
+        ShotCandidateConfig(floor_below_rim_margin_px=100.0),
+        hoop_lock=_hoop(),
+    )
+
+    assert finalized.story is not None
+    assert finalized.story.flight_end_frame == 58
+    assert finalized.story.trajectory_incomplete is False

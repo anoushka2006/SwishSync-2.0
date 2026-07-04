@@ -80,13 +80,42 @@ class ShotCandidateManager:
         if len(measured) < 2:
             return []
 
-        latest = measured[-1]
+        if not self._has_clear_new_release(self._pre_shot_buffer):
+            return []
+
+        cluster = self._trailing_consecutive_cluster(
+            measured,
+            self.config.gap_recovery.max_short_gap_fill_frames,
+        )
+        if len(cluster) < 2:
+            return []
+
+        latest = cluster[-1]
         pickup = [
             point
-            for point in measured
+            for point in cluster
             if point.frame_index < latest.frame_index
         ]
         return pickup if len(pickup) >= 2 else []
+
+    def _trailing_consecutive_cluster(
+        self,
+        points: list[SparseBallDetection],
+        max_gap_frames: int,
+    ) -> list[SparseBallDetection]:
+        """Return the trailing run of points with adjacent frame gaps within max_gap."""
+
+        if not points:
+            return []
+
+        ordered = sorted(points, key=lambda point: point.frame_index)
+        cluster = [ordered[-1]]
+        for point in reversed(ordered[:-1]):
+            if cluster[0].frame_index - point.frame_index <= max_gap_frames:
+                cluster.insert(0, point)
+            else:
+                break
+        return cluster
 
     def tracking_context_points(self) -> list[SparseBallDetection]:
         """Measured points used to predict localized ROI search windows."""

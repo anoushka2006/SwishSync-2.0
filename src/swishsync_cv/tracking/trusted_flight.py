@@ -34,8 +34,9 @@ def select_trusted_flight_points(
     Motion-validation filters (horizontal jump, vertical acceleration) are reserved
     for a documented future stage; add each there and prove CORE-safe before merging.
 
-    Phase 0: result is stored as ShotCandidate.trusted_flight_debug.
-    NOT read by the fitter, confidence scorer, story, or render modules in this PR.
+    Result is stored as ShotCandidate.trusted_flight_debug. NOT read by the
+    fitter or confidence scorer. Phase 1: compute_shot_story sources its
+    render-only flight window from this selection.
     """
     excluded: list[TrustedFlightExclusion] = []
 

@@ -64,6 +64,44 @@ def select_flight_fit_points(
     return fit_points, excluded
 
 
+def select_contiguous_flight_cluster(
+    points: list[SparseBallDetection],
+    max_gap_frames: int = 15,
+) -> list[SparseBallDetection]:
+    """Keep measured points from release until the first adjacent gap > max_gap_frames."""
+
+    if not points:
+        return []
+
+    ordered = sorted(points, key=lambda point: point.frame_index)
+    cluster = [ordered[0]]
+    for point in ordered[1:]:
+        if point.frame_index - cluster[-1].frame_index > max_gap_frames:
+            break
+        cluster.append(point)
+    return cluster
+
+
+def analyze_trajectory_completeness(
+    points: list[SparseBallDetection],
+    max_gap_frames: int = 15,
+) -> tuple[bool, int | None]:
+    """Return whether a later cluster exists and the relevant gap size for metadata/HUD."""
+
+    cluster = select_contiguous_flight_cluster(points, max_gap_frames)
+    ordered = sorted(points, key=lambda point: point.frame_index)
+
+    max_gap_in_cluster = 0
+    for start, end in zip(cluster, cluster[1:]):
+        max_gap_in_cluster = max(max_gap_in_cluster, end.frame_index - start.frame_index)
+
+    if len(cluster) < len(ordered):
+        split_gap = ordered[len(cluster)].frame_index - cluster[-1].frame_index
+        return True, split_gap
+
+    return False, max_gap_in_cluster if max_gap_in_cluster > 0 else None
+
+
 def fit_weighted_parabola(
     points: list[SparseBallDetection],
     rim_anchor: tuple[float, float] | None = None,

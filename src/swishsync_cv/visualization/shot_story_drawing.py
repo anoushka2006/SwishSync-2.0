@@ -22,6 +22,7 @@ POST_SHOT_COLOR = (140, 230, 160)
 GAP_PREDICTED_COLOR = (60, 180, 255)
 RELEASE_COLOR = (255, 220, 120)
 MEASURED_COLOR = (200, 200, 255)
+DEFAULT_REACQUISITION_GAP_FRAMES = 15
 HIGH_CONF_COLOR = (80, 220, 120)
 MEDIUM_CONF_COLOR = (80, 200, 255)
 LOW_CONF_COLOR = (100, 100, 255)
@@ -159,6 +160,8 @@ def _draw_storyless_finalized(
                 gap_predicted_frames=tuple(sorted(gap_frames)),
                 show_post_shot=False,
                 show_pickup=False,
+                trajectory_incomplete=False,
+                max_measured_gap_frames=None,
             )
             _draw_gap_bridges(frame, shot, fallback_story, opacity=opacity)
         _draw_measured_continuity_path(frame, shot, opacity=opacity, story=fallback_story)
@@ -263,7 +266,7 @@ def _draw_pre_release_continuity(
         p1 = (int(round(end.x)), int(round(end.y)))
         if _uses_gap_prediction(start, end):
             _draw_dotted_line(frame, p0, p1, _scale_color(GAP_PREDICTED_COLOR, opacity))
-        else:
+        elif _measured_segment_gap_ok(start, end):
             _draw_dotted_line(frame, p0, p1, _scale_color(MEASURED_COLOR, opacity))
 
 
@@ -423,7 +426,7 @@ def _draw_measured_continuity_path(
         p1 = (int(round(end.x)), int(round(end.y)))
         if _uses_gap_prediction(start, end):
             _draw_dotted_line(frame, p0, p1, gap_color)
-        else:
+        elif _measured_segment_gap_ok(start, end):
             _draw_dotted_line(frame, p0, p1, measured_color)
 
 
@@ -582,6 +585,18 @@ def _uses_gap_prediction(
         effective_point_source(start) == "gap_predicted"
         or effective_point_source(end) == "gap_predicted"
     )
+
+
+def _measured_segment_gap_ok(
+    start: SparseBallDetection,
+    end: SparseBallDetection,
+    max_gap_frames: int = DEFAULT_REACQUISITION_GAP_FRAMES,
+) -> bool:
+    """Do not draw measured continuity across long mid-flight reacquisition gaps."""
+
+    if _uses_gap_prediction(start, end):
+        return True
+    return end.frame_index - start.frame_index <= max_gap_frames
 
 
 def _confidence_color(confidence: float) -> tuple[int, int, int]:

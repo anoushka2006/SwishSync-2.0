@@ -275,6 +275,22 @@ def shot_candidate_to_dict(candidate: ShotCandidate) -> dict[str, object]:
             if candidate.trusted_flight_debug is not None
             else None
         ),
+        "outcome": (
+            {
+                "verdict": candidate.outcome.verdict,
+                "crossing_frame": candidate.outcome.crossing_frame,
+                "crossing_x": candidate.outcome.crossing_x,
+                "rim_x_span": (
+                    list(candidate.outcome.rim_x_span)
+                    if candidate.outcome.rim_x_span is not None
+                    else None
+                ),
+                "margin_ratio": candidate.outcome.margin_ratio,
+                "method": candidate.outcome.method,
+            }
+            if candidate.outcome is not None
+            else None
+        ),
     }
     return payload
 

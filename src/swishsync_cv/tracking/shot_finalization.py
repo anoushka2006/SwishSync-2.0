@@ -13,6 +13,7 @@ from swishsync_cv.tracking.parabola import (
     select_contiguous_flight_cluster,
     select_flight_fit_points,
 )
+from swishsync_cv.tracking.shot_outcome import classify_shot_outcome
 from swishsync_cv.tracking.shot_story import compute_shot_story
 from swishsync_cv.tracking.trusted_flight import select_trusted_flight_points
 
@@ -156,6 +157,19 @@ def finalize_shot(
         hoop_lock,
         config.trusted_flight,
         floor_margin_px=config.floor_below_rim_margin_px,
+    )
+    candidate.outcome = classify_shot_outcome(
+        candidate.candidate_points + candidate.post_shot_points,
+        hoop_lock,
+        candidate.parabola_fit,
+    )
+    logger.info(
+        "shot outcome verdict=%s crossing_frame=%s margin_ratio=%s",
+        candidate.outcome.verdict,
+        candidate.outcome.crossing_frame,
+        f"{candidate.outcome.margin_ratio:.2f}"
+        if candidate.outcome.margin_ratio is not None
+        else None,
     )
     candidate.state = "shot_finalized"
     candidate.story = compute_shot_story(

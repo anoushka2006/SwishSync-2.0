@@ -11,6 +11,7 @@ from swishsync_cv.tracking.gap_recovery import continuity_track
 COLLECTING_POINT_COLOR = (200, 200, 255)
 COLLECTING_PATH_COLOR = (160, 160, 220)
 GAP_PREDICTED_COLOR = (60, 180, 255)
+DEFAULT_REACQUISITION_GAP_FRAMES = 15
 
 
 def draw_continuity_track(
@@ -41,7 +42,7 @@ def draw_continuity_track(
         segment_color = path_color
         if _segment_uses_gap_prediction(start_point, end_point):
             _draw_dotted_line(frame, start, end, gap_color)
-        else:
+        elif _measured_segment_gap_ok(start_point, end_point):
             _draw_dotted_line(frame, start, end, segment_color)
 
 
@@ -53,6 +54,16 @@ def _segment_uses_gap_prediction(
         effective_point_source(start_point) == "gap_predicted"
         or effective_point_source(end_point) == "gap_predicted"
     )
+
+
+def _measured_segment_gap_ok(
+    start_point: SparseBallDetection,
+    end_point: SparseBallDetection,
+    max_gap_frames: int = DEFAULT_REACQUISITION_GAP_FRAMES,
+) -> bool:
+    if _segment_uses_gap_prediction(start_point, end_point):
+        return True
+    return end_point.frame_index - start_point.frame_index <= max_gap_frames
 
 
 def _draw_dotted_line(

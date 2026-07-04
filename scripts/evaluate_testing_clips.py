@@ -70,6 +70,10 @@ def processed_video_name(label: str) -> str:
     return f"processed_{label.lower()}.mp4"
 
 
+def preview_video_name(label: str) -> str:
+    return f"preview_{label.lower()}.mp4"
+
+
 def run_clip(video_path: Path, output_dir: Path, label: str) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
