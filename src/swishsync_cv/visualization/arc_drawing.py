@@ -29,12 +29,12 @@ def draw_finalized_arc(frame: np.ndarray, display_shot: ShotCandidate) -> None:
 
     arc_render = display_shot.arc_render
     if arc_render is None:
-        _draw_solid_polyline(frame, fit.sample_arc(num_points=80), _arc_color(display_shot), 3)
+        _draw_solid_polyline(frame, fit.sample_arc(num_points=80), _arc_color(display_shot), 5)
         return
 
     fit_x_min, fit_x_max = arc_render.fit_x_range
     observed_points = fit.sample_arc_range(fit_x_min, fit_x_max, num_points=64)
-    _draw_solid_polyline(frame, observed_points, _arc_color(display_shot), 3)
+    _draw_solid_polyline(frame, observed_points, _arc_color(display_shot), 5)
 
     if not arc_render.visual_extension_used:
         return
@@ -48,7 +48,7 @@ def draw_finalized_arc(frame: np.ndarray, display_shot: ShotCandidate) -> None:
         return
 
     extension_points = fit.sample_arc_range(observed_x, extended_x, num_points=24)
-    _draw_dotted_polyline(frame, extension_points, EXTENDED_ARC_COLOR, 2)
+    _draw_dotted_polyline(frame, extension_points, EXTENDED_ARC_COLOR, 3)
 
 
 def _draw_solid_polyline(

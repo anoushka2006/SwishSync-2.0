@@ -200,3 +200,21 @@ Shown in the eval browser.
 **Verification:** 138 tests passing; outcome agreement unchanged at 14/17
 (zero wrong verdicts) with rim-only geometry active. Entry angles physically
 plausible: makes cluster 38–45°, misses scatter 19–55°.
+
+---
+
+## 2026-07-05 — floor_idle finalize (fixes mid-video arc rendering)
+
+**Decision:** a sustained streak of excluded floor-bounce points
+(>= max_idle_frames, default 8) finalizes the active candidate with new
+reason `floor_idle`. Previously a ball bouncing on the floor after the shot
+kept the candidate alive to end-of-video (every measured point reset the
+activity clock even when excluded as a floor bounce), so several clips never
+rendered a fitted arc or verdict color mid-clip. Fit inputs are unchanged —
+candidate_points membership is identical; only finalize timing moves earlier.
+Also: finalized arc thickness 3→5 (extension 2→3) so the arc reads thicker
+than the 4px-radius dots.
+
+**Verification:** outcome agreement unchanged at 14/17; CORE RMSE identical
+(A 0.76, C 0.56, P 1.19, R 0.73, S 1.10 on auto-lock); fits now exist
+mid-video on all clips with sufficient points; 138 tests pass.

@@ -10,7 +10,9 @@ import numpy as np
 
 DetectionCategory = Literal["basketball", "hoop"]
 ShotLifecycleState = Literal["idle", "collecting_shot", "shot_finalized"]
-ShotFinalizeReason = Literal["post_rim", "horizontal_jump", "idle", "end_of_video", "unknown"]
+ShotFinalizeReason = Literal[
+    "post_rim", "horizontal_jump", "idle", "floor_idle", "end_of_video", "unknown"
+]
 ShotMotionDirection = Literal["ascending", "descending", "unknown"]
 PointSource = Literal["measured", "sparse_linear", "gap_predicted"]
 TrustedFlightExclusionReason = Literal["gap_predicted", "floor_bounce", "post_cluster"]

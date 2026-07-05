@@ -49,6 +49,7 @@ class ShotCandidateManager:
         self.finalized_shots: list[ShotCandidate] = []
         self._pre_shot_buffer: list[SparseBallDetection] = []
         self._frames_since_point = 0
+        self._floor_bounce_streak = 0
         self._interpolated_ignored_count = 0
         self._last_hoop_lock: HoopLock | None = None
         self._pending_finalize_reason: ShotFinalizeReason | None = None
@@ -233,7 +234,15 @@ class ShotCandidateManager:
                     point.frame_index,
                     point.y,
                 )
+                # a sustained streak of floor bounces means the flight is over;
+                # without this the bouncing ball keeps the candidate alive to
+                # end-of-video and the fitted arc never renders mid-clip
+                self._floor_bounce_streak += 1
+                if self._floor_bounce_streak >= self.config.max_idle_frames:
+                    self._pending_finalize_reason = "floor_idle"
+                    return self._finalize_active()
             else:
+                self._floor_bounce_streak = 0
                 for predicted in backfill_gap_points(
                     self.active.candidate_points,
                     point,
@@ -299,6 +308,7 @@ class ShotCandidateManager:
         self.active.candidate_points.extend(measured_seeds)
         self.active.continuity_points.extend(measured_seeds)
         self._frames_since_point = 0
+        self._floor_bounce_streak = 0
         self._pre_shot_buffer.clear()
         logger.info(
             "shot started frame=%s seed_points=%s",
@@ -578,6 +588,7 @@ class ShotCandidateManager:
             logger.info("candidate reset (too few points)")
             self.active = None
             self._frames_since_point = 0
+            self._floor_bounce_streak = 0
             return None
 
         self.active.end_frame = self.active.candidate_points[-1].frame_index
@@ -596,6 +607,7 @@ class ShotCandidateManager:
         )
         self.active = None
         self._frames_since_point = 0
+        self._floor_bounce_streak = 0
         self._interpolated_ignored_count = 0
         self.post_shot_debug_points.clear()
         self._cooldown = FinalizeCooldownState(
