@@ -90,6 +90,12 @@ discriminating case is locked in by `tests/test_trusted_flight_story.py`
   a make/miss badge + rim margin. Ground-truth labels derived visually from
   rim-area montages, pending user confirmation.
 - Eval browser (`scripts/build_eval_browser.py`) now surfaces the verdict.
+- **Rim-zone re-scan** (rolling rim-crop buffer + retroactive ball detection
+  after flight end) lifted make/miss agreement to **14/17 with zero wrong
+  verdicts** (3 honest unknowns on far-court clips). Ground truth lives in
+  `run_full_eval_rerun.OUTCOME_GROUND_TRUTH`; agreement eval:
+  `scripts/eval_shot_outcome.py`. Finalized arcs render green (make) /
+  red (miss). CORE baselines re-pinned post contiguity-clamp tree.
 
 ## Branch
 

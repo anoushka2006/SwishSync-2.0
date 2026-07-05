@@ -34,12 +34,23 @@ BBOX_OVERRIDES: dict[str, tuple[float, float, float, float]] = {
     "C": (371.5, 233.0, 122.0, 173.0),
 }
 
+# Re-pinned 2026-07-05 (manual-lock path, post contiguity-clamp/pickup-gating
+# tree, commit deb4170). Prior pins: A 0.54, C 0.79, P 1.19, R 0.73, S 1.10.
 BASELINE_RMSE = {
-    "A": 0.54,
-    "C": 0.79,
-    "P": 1.19,
-    "R": 0.73,
-    "S": 1.10,
+    "A": 1.18,
+    "C": 0.64,
+    "P": 1.48,
+    "R": 0.92,
+    "S": 1.60,
+}
+
+# User-confirmed make/miss ground truth (2026-07-05). F and J contain real
+# shots the pipeline currently never detects (FAILURE clips).
+OUTCOME_GROUND_TRUTH = {
+    "A": "make", "B": "miss", "C": "make", "D": "miss", "E": "miss",
+    "F": "make", "G": "miss", "H": "miss", "I": "miss", "J": "miss",
+    "K": "miss", "L": "make", "M": "miss", "N": "make", "O": "miss",
+    "P": "miss", "Q": "make", "R": "miss", "S": "miss",
 }
 BASELINE_ZERO_SHOT = {"D", "E", "F", "G", "H", "I", "J", "K"}
 BOUNCE_CLIPS = {"H", "L", "M", "N", "O", "Q"}

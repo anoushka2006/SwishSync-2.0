@@ -152,3 +152,33 @@ legacy bbox bottom for tall hand-drawn boxes.
 **Verification:** `tests/test_shot_outcome.py` (10 tests; full suite 131
 passed) + 19-clip agreement run against visually derived labels (see
 CURRENT_STATUS; labels pending user confirmation).
+
+---
+
+## 2026-07-05 — Rim-zone re-scan + outcome ground truth + arc coloring
+
+**Decision:** make/miss verdicts are now refined by direct observation of the
+rim zone (`refine_outcome_with_rim_zone`, still render-only). The pipeline
+keeps a rolling 72-frame buffer of rim crops; when a shot finalizes — even at
+end-of-video, where candidates that linger waiting for reacquisition close —
+ball detection runs retroactively over buffered crops past the flight end,
+then live for 48 more frames. Evidence rules: first below-ring emergence
+decides; an inside-span make must emerge ≥ 0.35×rim-width below the ring
+(shallow inside points are the ball passing in FRONT of the rim); rattle
+exception (inside+deeper shortly after a near-rim outside point); sustained
+rise above the ring after rim contact = miss (user's bounce heuristic);
+static near-identical detections are dropped as rim clutter; min detection
+confidence 0.35 (real balls score 0.85+). Finalized arcs render green/red by
+verdict (`arc_drawing.py`), falling back to the legacy color for unknown.
+
+**Ground truth (user-confirmed, in `run_full_eval_rerun.OUTCOME_GROUND_TRUTH`):**
+makes A C F L N Q; misses B D E G H I J K M O P R S.
+
+**Verification:** `scripts/eval_shot_outcome.py` — agreement 14/17 with ZERO
+wrong verdicts: 14 correct, 3 honest unknowns (D, E, G: far-court clips where
+the ball at the rim never clears 0.35 confidence — fix belongs to own-weights
+training). F, J remain undetected shots (FAILURE clips). Full suite 135
+passed. CORE untouched: all rescan state is render-only.
+
+**Baselines re-pinned** in `run_full_eval_rerun.BASELINE_RMSE` to the
+2026-07-05 manual-lock rerun (A 1.18, C 0.64, P 1.48, R 0.92, S 1.60).

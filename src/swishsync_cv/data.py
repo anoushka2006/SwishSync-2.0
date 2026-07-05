@@ -271,7 +271,7 @@ class ShotOutcome:
     crossing_x: float | None = None
     rim_x_span: tuple[float, float] | None = None
     margin_ratio: float | None = None
-    method: Literal["measured", "fit"] | None = None
+    method: Literal["measured", "fit", "rim_rescan"] | None = None
 
 
 @dataclass(frozen=True)
@@ -317,6 +317,7 @@ class ShotCandidate:
     story: ShotStoryMetadata | None = None
     trusted_flight_debug: TrustedFlightSelection | None = None
     outcome: ShotOutcome | None = None
+    rim_zone_points: list[SparseBallDetection] = field(default_factory=list)
 
     @property
     def raw_points(self) -> list[SparseBallDetection]:

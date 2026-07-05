@@ -122,3 +122,51 @@ def test_tall_manual_bbox_uses_bottom_as_rim_line() -> None:
     points = [_point(10, 1300, 460), _point(12, 1320, 520)]  # crosses y=495 inside
     outcome = classify_shot_outcome(points, hoop)
     assert outcome.verdict == "make"
+
+
+def test_rim_rescan_first_below_ring_point_decides() -> None:
+    from swishsync_cv.tracking.shot_outcome import refine_outcome_with_rim_zone
+
+    base = classify_shot_outcome([_point(10, 430, 130), _point(12, 445, 150)], _hoop())
+    # emerged below ring inside the span → make, overriding unknown
+    rim_zone = [_point(20, 450, 200), _point(22, 460, 240)]
+    refined = refine_outcome_with_rim_zone(base, rim_zone, _hoop())
+    assert refined.verdict == "make"
+    assert refined.method == "rim_rescan"
+
+    # emerged below ring far outside the span → miss, even if a later
+    # rebound point rolls back under the net
+    rim_zone = [_point(20, 320, 200), _point(24, 450, 250)]
+    assert refine_outcome_with_rim_zone(base, rim_zone, _hoop()).verdict == "miss"
+
+
+def test_rim_rescan_bounce_up_is_miss() -> None:
+    from swishsync_cv.tracking.shot_outcome import refine_outcome_with_rim_zone
+
+    base = classify_shot_outcome([_point(10, 430, 130), _point(12, 445, 150)], _hoop())
+    # ball stays above the ring and rises: rim bounce → miss
+    rim_zone = [_point(20, 460, 175), _point(22, 470, 160), _point(24, 480, 140)]
+    refined = refine_outcome_with_rim_zone(base, rim_zone, _hoop())
+    assert refined.verdict == "miss"
+
+
+def test_rim_rescan_keeps_base_without_evidence() -> None:
+    from swishsync_cv.tracking.shot_outcome import refine_outcome_with_rim_zone
+
+    base = classify_shot_outcome(
+        [_point(10, 430, 130), _point(12, 445, 170), _point(14, 455, 210)], _hoop()
+    )
+    assert base.verdict == "make"
+    assert refine_outcome_with_rim_zone(base, [], _hoop()) == base
+
+
+def test_rim_rescan_rattle_exception_inside_deeper_shortly_after() -> None:
+    from swishsync_cv.tracking.shot_outcome import refine_outcome_with_rim_zone
+
+    base = classify_shot_outcome([_point(10, 430, 130), _point(12, 445, 150)], _hoop())
+    # first below-ring point on the rim edge (outside), then deeper inside → make
+    rim_zone = [_point(20, 510, 185), _point(26, 455, 230)]
+    assert refine_outcome_with_rim_zone(base, rim_zone, _hoop()).verdict == "make"
+    # same but the inside point comes too late (rebound) → stays miss
+    rim_zone = [_point(20, 510, 185), _point(40, 455, 230)]
+    assert refine_outcome_with_rim_zone(base, rim_zone, _hoop()).verdict == "miss"

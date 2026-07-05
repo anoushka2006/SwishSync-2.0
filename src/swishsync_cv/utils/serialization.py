@@ -220,6 +220,9 @@ def shot_candidate_to_dict(candidate: ShotCandidate) -> dict[str, object]:
         "candidate_points": [
             sparse_detection_to_dict(point) for point in candidate.candidate_points
         ],
+        "rim_zone_points": [
+            sparse_detection_to_dict(point) for point in candidate.rim_zone_points
+        ],
         "continuity_points": [
             sparse_detection_to_dict(point) for point in candidate.continuity_points
         ],

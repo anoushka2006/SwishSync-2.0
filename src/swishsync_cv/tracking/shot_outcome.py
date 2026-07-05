@@ -34,6 +34,13 @@ from swishsync_cv.data import (
 # ponytail: naive thresholds, tune from eval if verdicts cluster wrong.
 MAX_CROSSING_GAP_FRAMES = 20  # straddling pair further apart is too uncertain
 MAX_APPROACH_GAP_PX = 160.0  # fit fallback only if ball got this close to ring
+RESCAN_SPAN_TOLERANCE = 0.05  # rim x-span slack (fraction of half-width)
+RESCAN_BOUNCE_RISE_PX = 12.0  # upward motion above the ring that signals a miss
+RESCAN_RATTLE_WINDOW_FRAMES = 12  # inside+deeper evidence shortly after an
+# outside below-ring point → rattled in, not a miss
+RESCAN_MAKE_DEPTH_RATIO = 0.35  # an inside-span make must emerge this deep
+# below the ring (fraction of rim width): a ball barely below the ring inside
+# the span is usually arriving in FRONT of the rim, not through the net
 
 
 def _ring_y(hoop_lock: HoopLock) -> float:
@@ -136,3 +143,111 @@ def _fit_crossing(
     # of the descending-branch roots, take the one nearest the last observation
     crossing_x = min(candidates, key=lambda x: abs(x - last.x))
     return (last.frame_index, crossing_x)
+
+
+def refine_outcome_with_rim_zone(
+    outcome: ShotOutcome | None,
+    rim_zone_points: list[SparseBallDetection],
+    hoop_lock: HoopLock | None,
+) -> ShotOutcome:
+    """Refine a verdict using rim-crop ball detections from after flight end.
+
+    Direct observation beats geometry, so rim-zone evidence overrides the
+    initial verdict when conclusive:
+
+    1. ball seen below the ring line inside the rim span → make
+    2. ball seen below the ring line clearly outside the span → miss
+    3. ball near the ring that then rises (rim bounce upward) → miss
+    4. no conclusive evidence → keep the initial verdict
+    """
+
+    base = outcome or ShotOutcome(verdict="unknown")
+    if hoop_lock is None or not rim_zone_points:
+        return base
+
+    ring_y = _ring_y(hoop_lock)
+    rim_x1, _, rim_x2, _ = hoop_lock.bbox_xyxy
+    half_width = max((rim_x2 - rim_x1) / 2.0, 1.0)
+    rim_center_x = (rim_x1 + rim_x2) / 2.0
+    slack = half_width * RESCAN_SPAN_TOLERANCE
+
+    ordered = sorted(rim_zone_points, key=lambda point: point.frame_index)
+    ordered = _drop_static_detections(ordered)
+    if not ordered:
+        return base
+
+    make_depth = ring_y + (rim_x2 - rim_x1) * RESCAN_MAKE_DEPTH_RATIO
+    below = [point for point in ordered if point.y > ring_y]
+    decisive: SparseBallDetection | None = None
+    inside = False
+    for index, point in enumerate(below):
+        point_inside = rim_x1 - slack <= point.x <= rim_x2 + slack
+        if point_inside:
+            if point.y >= make_depth:
+                decisive, inside = point, True  # emerged through the net
+                break
+            continue  # barely below the ring inside the span: ambiguous
+            # (usually the ball passing in FRONT of the rim on arrival)
+        # emerged below the ring outside the span
+        decisive, inside = point, False
+        if abs(point.x - rim_center_x) / half_width <= 1.4:
+            # rattle exception: an inside AND deeper point shortly after means
+            # the ball dropped through after dancing on the rim edge; only for
+            # balls that emerged near the rim edge, not ones already at the floor
+            for later in below[index + 1 :]:
+                if later.frame_index - point.frame_index > RESCAN_RATTLE_WINDOW_FRAMES:
+                    break
+                if (
+                    rim_x1 - slack <= later.x <= rim_x2 + slack
+                    and later.y > point.y
+                    and later.y >= make_depth
+                ):
+                    decisive, inside = later, True
+                    break
+        break
+    if decisive is not None:
+        return ShotOutcome(
+            verdict="make" if inside else "miss",
+            crossing_frame=decisive.frame_index,
+            crossing_x=decisive.x,
+            rim_x_span=(rim_x1, rim_x2),
+            margin_ratio=abs(decisive.x - rim_center_x) / half_width,
+            method="rim_rescan",
+        )
+
+    # everything stayed above the ring: sustained rise after rim contact = miss
+    rise = ordered[0].y - ordered[-1].y  # positive = moved up
+    if len(ordered) >= 2 and rise > RESCAN_BOUNCE_RISE_PX:
+        return ShotOutcome(
+            verdict="miss",
+            crossing_frame=ordered[-1].frame_index,
+            crossing_x=ordered[-1].x,
+            rim_x_span=(rim_x1, rim_x2),
+            margin_ratio=None,
+            method="rim_rescan",
+        )
+    return base
+
+
+def _drop_static_detections(
+    ordered: list[SparseBallDetection],
+    max_static_px: float = 3.0,
+) -> list[SparseBallDetection]:
+    """Remove near-identical consecutive detections (rim clutter, not a ball).
+
+    A ball in the rim zone is falling or bouncing — it moves. Two consecutive
+    detections within a few pixels of each other are a static false positive.
+    """
+
+    if len(ordered) < 2:
+        return ordered
+    static: set[int] = set()
+    for index in range(len(ordered) - 1):
+        first, second = ordered[index], ordered[index + 1]
+        if (
+            abs(first.x - second.x) <= max_static_px
+            and abs(first.y - second.y) <= max_static_px
+        ):
+            static.add(index)
+            static.add(index + 1)
+    return [point for index, point in enumerate(ordered) if index not in static]

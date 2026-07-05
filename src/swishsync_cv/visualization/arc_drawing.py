@@ -9,6 +9,17 @@ from swishsync_cv.data import ShotCandidate
 
 FINAL_ARC_COLOR = (80, 220, 255)
 EXTENDED_ARC_COLOR = (120, 180, 220)
+MAKE_ARC_COLOR = (90, 210, 90)  # green (BGR)
+MISS_ARC_COLOR = (80, 80, 230)  # red (BGR)
+
+
+def _arc_color(shot: ShotCandidate) -> tuple[int, int, int]:
+    verdict = shot.outcome.verdict if shot.outcome is not None else None
+    if verdict == "make":
+        return MAKE_ARC_COLOR
+    if verdict == "miss":
+        return MISS_ARC_COLOR
+    return FINAL_ARC_COLOR
 
 
 def draw_finalized_arc(frame: np.ndarray, display_shot: ShotCandidate) -> None:
@@ -18,12 +29,12 @@ def draw_finalized_arc(frame: np.ndarray, display_shot: ShotCandidate) -> None:
 
     arc_render = display_shot.arc_render
     if arc_render is None:
-        _draw_solid_polyline(frame, fit.sample_arc(num_points=80), FINAL_ARC_COLOR, 3)
+        _draw_solid_polyline(frame, fit.sample_arc(num_points=80), _arc_color(display_shot), 3)
         return
 
     fit_x_min, fit_x_max = arc_render.fit_x_range
     observed_points = fit.sample_arc_range(fit_x_min, fit_x_max, num_points=64)
-    _draw_solid_polyline(frame, observed_points, FINAL_ARC_COLOR, 3)
+    _draw_solid_polyline(frame, observed_points, _arc_color(display_shot), 3)
 
     if not arc_render.visual_extension_used:
         return
