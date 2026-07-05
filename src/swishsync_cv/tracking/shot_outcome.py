@@ -43,13 +43,34 @@ RESCAN_MAKE_DEPTH_RATIO = 0.35  # an inside-span make must emerge this deep
 # the span is usually arriving in FRONT of the rim, not through the net
 
 
-def _ring_y(hoop_lock: HoopLock) -> float:
+def _rim_geometry(hoop_lock: HoopLock) -> tuple[float, float, float]:
+    """Return (ring_y, rim_x1, rim_x2), preferring the orange-ring-only box."""
+
+    if hoop_lock.rim_bbox_xyxy is not None:
+        x1, _y1, x2, y2 = hoop_lock.rim_bbox_xyxy
+        return y2, x1, x2  # ring band bottom = ring plane
     x1, y1, x2, y2 = hoop_lock.bbox_xyxy
     width = max(x2 - x1, 1.0)
     height = y2 - y1
     # squat box (tight rim+net) → ring is the top; tall box (backboard/pole
     # included, e.g. hand-drawn) → keep the legacy bottom convention
-    return y1 if height <= width * 1.5 else y2
+    return (y1 if height <= width * 1.5 else y2), x1, x2
+
+
+def _ring_y(hoop_lock: HoopLock) -> float:
+    return _rim_geometry(hoop_lock)[0]
+
+
+def _entry_angle_deg(
+    parabola_fit: ParabolaFit | None,
+    crossing_x: float | None,
+) -> float | None:
+    """Arc angle vs horizontal (degrees) at the ring crossing. ~45° is ideal."""
+
+    if parabola_fit is None or crossing_x is None:
+        return None
+    a, b, _ = parabola_fit.coefficients
+    return math.degrees(math.atan(abs(2.0 * a * crossing_x + b)))
 
 
 def classify_shot_outcome(
@@ -69,8 +90,7 @@ def classify_shot_outcome(
     if len(measured) < 2:
         return ShotOutcome(verdict="unknown")
 
-    ring_y = _ring_y(hoop_lock)
-    rim_x1, _, rim_x2, _ = hoop_lock.bbox_xyxy
+    ring_y, rim_x1, rim_x2 = _rim_geometry(hoop_lock)
 
     crossing = _measured_crossing(measured, ring_y)
     method = "measured"
@@ -91,6 +111,7 @@ def classify_shot_outcome(
         rim_x_span=(rim_x1, rim_x2),
         margin_ratio=margin_ratio,
         method=method,
+        entry_angle_deg=_entry_angle_deg(parabola_fit, crossing_x),
     )
 
 
@@ -149,6 +170,7 @@ def refine_outcome_with_rim_zone(
     outcome: ShotOutcome | None,
     rim_zone_points: list[SparseBallDetection],
     hoop_lock: HoopLock | None,
+    parabola_fit: ParabolaFit | None = None,
 ) -> ShotOutcome:
     """Refine a verdict using rim-crop ball detections from after flight end.
 
@@ -165,8 +187,7 @@ def refine_outcome_with_rim_zone(
     if hoop_lock is None or not rim_zone_points:
         return base
 
-    ring_y = _ring_y(hoop_lock)
-    rim_x1, _, rim_x2, _ = hoop_lock.bbox_xyxy
+    ring_y, rim_x1, rim_x2 = _rim_geometry(hoop_lock)
     half_width = max((rim_x2 - rim_x1) / 2.0, 1.0)
     rim_center_x = (rim_x1 + rim_x2) / 2.0
     slack = half_width * RESCAN_SPAN_TOLERANCE
@@ -213,6 +234,11 @@ def refine_outcome_with_rim_zone(
             rim_x_span=(rim_x1, rim_x2),
             margin_ratio=abs(decisive.x - rim_center_x) / half_width,
             method="rim_rescan",
+            entry_angle_deg=(
+                base.entry_angle_deg
+                if base.entry_angle_deg is not None
+                else _entry_angle_deg(parabola_fit, decisive.x)
+            ),
         )
 
     # everything stayed above the ring: sustained rise after rim contact = miss
@@ -225,6 +251,7 @@ def refine_outcome_with_rim_zone(
             rim_x_span=(rim_x1, rim_x2),
             margin_ratio=None,
             method="rim_rescan",
+            entry_angle_deg=base.entry_angle_deg,
         )
     return base
 

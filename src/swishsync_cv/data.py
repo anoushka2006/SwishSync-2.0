@@ -118,6 +118,9 @@ class HoopLock:
     is_locked: bool = False
     detector_confidence: float = 0.0
     color_score: float = 0.0
+    # orange-ring-only sub-box (excludes net/backboard); refined from the
+    # color mask when available, None for manual/unrefinable locks
+    rim_bbox_xyxy: tuple[float, float, float, float] | None = None
 
     @property
     def rim_center_x(self) -> float:
@@ -272,6 +275,7 @@ class ShotOutcome:
     rim_x_span: tuple[float, float] | None = None
     margin_ratio: float | None = None
     method: Literal["measured", "fit", "rim_rescan"] | None = None
+    entry_angle_deg: float | None = None  # arc angle vs horizontal at the ring
 
 
 @dataclass(frozen=True)

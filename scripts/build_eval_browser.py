@@ -55,6 +55,7 @@ def collect_clip_rows(eval_dir: Path) -> list[dict]:
 
         outcome_verdict = None
         outcome_margin = None
+        entry_angle = None
         shots_path = out_dir / "shots.json"
         if shots_path.exists():
             try:
@@ -66,6 +67,7 @@ def collect_clip_rows(eval_dir: Path) -> list[dict]:
                 outcome = primary.get("outcome") or {}
                 outcome_verdict = outcome.get("verdict")
                 outcome_margin = outcome.get("margin_ratio")
+                entry_angle = outcome.get("entry_angle_deg")
 
         preview_path = out_dir / preview_video_name(label)
         rel_dir = slug
@@ -91,6 +93,7 @@ def collect_clip_rows(eval_dir: Path) -> list[dict]:
                 "weighted_rmse": row.get("weighted_rmse"),
                 "outcome_verdict": outcome_verdict,
                 "outcome_margin": outcome_margin,
+                "entry_angle_deg": entry_angle,
                 "notes": row.get("notes", ""),
                 "start_frame": row.get("start_frame"),
                 "end_frame": row.get("end_frame"),
@@ -406,6 +409,7 @@ def render_html(clips: list[dict], eval_dir: Path) -> str:
             <div><span class="metric-label">Source cat</span><div class="metric-value">${{clip.source_category}}</div></div>
             <div><span class="metric-label">Make/Miss</span><div class="metric-value">${{fmt(clip.outcome_verdict)}}</div></div>
             <div><span class="metric-label">Rim margin</span><div class="metric-value">${{clip.outcome_margin != null ? clip.outcome_margin.toFixed(2) : "n/a"}}</div></div>
+            <div><span class="metric-label">Entry angle</span><div class="metric-value">${{clip.entry_angle_deg != null ? clip.entry_angle_deg.toFixed(1) + "\u00b0" : "n/a"}}</div></div>
           </div>
           <div class="notes">${{clip.notes || "—"}}</div>
           <div class="links">

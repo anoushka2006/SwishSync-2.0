@@ -298,3 +298,65 @@ def _merge_candidates(first: HoopCandidate, second: HoopCandidate) -> HoopCandid
         composite_score=composite_score,
         source="hybrid",
     )
+
+
+def refine_rim_bbox(
+    frame: np.ndarray,
+    bbox_xyxy: tuple[float, float, float, float],
+    config: HoopLockConfig,
+    min_row_fill: float = 0.25,
+    min_mask_pixels: int = 20,
+) -> tuple[float, float, float, float] | None:
+    """Shrink a hoop bbox (rim+net) to just the orange ring band.
+
+    Finds the topmost horizontal band of orange inside the box — the ring —
+    and returns its bbox in frame coordinates. None when there is too little
+    orange to be trustworthy (bad lighting, occluded rim).
+    """
+
+    x1, y1, x2, y2 = [int(round(value)) for value in bbox_xyxy]
+    height, width = frame.shape[:2]
+    x1, x2 = max(0, x1), min(width, x2)
+    y1, y2 = max(0, y1), min(height, y2)
+    roi = frame[y1:y2, x1:x2]
+    if roi.size == 0:
+        return None
+
+    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+    lower = np.array(
+        [config.orange_hue_min, config.orange_sat_min, config.orange_val_min],
+        dtype=np.uint8,
+    )
+    upper = np.array(
+        [config.orange_hue_max, config.orange_sat_max, config.orange_val_max],
+        dtype=np.uint8,
+    )
+    mask = cv2.inRange(hsv, lower, upper)
+    if int(np.count_nonzero(mask)) < min_mask_pixels:
+        return None
+
+    row_counts = mask.sum(axis=1) / 255
+    threshold = max(row_counts.max() * min_row_fill, 1.0)
+    dense_rows = np.flatnonzero(row_counts >= threshold)
+    if dense_rows.size == 0:
+        return None
+
+    # topmost contiguous dense band = the ring seen edge-on
+    band_start = int(dense_rows[0])
+    band_end = band_start
+    for row in dense_rows[1:]:
+        if row - band_end > 2:
+            break
+        band_end = int(row)
+
+    band = mask[band_start : band_end + 1]
+    columns = np.flatnonzero(band.sum(axis=0))
+    if columns.size < 2:
+        return None
+
+    return (
+        float(x1 + columns[0]),
+        float(y1 + band_start),
+        float(x1 + columns[-1] + 1),
+        float(y1 + band_end + 1),
+    )

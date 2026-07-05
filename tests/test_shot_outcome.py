@@ -170,3 +170,46 @@ def test_rim_rescan_rattle_exception_inside_deeper_shortly_after() -> None:
     # same but the inside point comes too late (rebound) → stays miss
     rim_zone = [_point(20, 510, 185), _point(40, 455, 230)]
     assert refine_outcome_with_rim_zone(base, rim_zone, _hoop()).verdict == "miss"
+
+
+def test_rim_bbox_preferred_for_ring_geometry() -> None:
+    hoop = HoopLock(
+        center_x=450.0,
+        center_y=210.0,
+        bbox_xyxy=(400.0, 180.0, 500.0, 260.0),
+        confidence=0.9,
+        locked_at_frame=0,
+        is_locked=True,
+        rim_bbox_xyxy=(410.0, 178.0, 490.0, 186.0),  # tight orange ring band
+    )
+    # crossing y=186 (ring band bottom) at x inside 410..490 → make
+    points = [_point(10, 440, 150), _point(12, 452, 220)]
+    outcome = classify_shot_outcome(points, hoop)
+    assert outcome.verdict == "make"
+    assert outcome.rim_x_span == (410.0, 490.0)
+
+
+def test_entry_angle_computed_from_fit() -> None:
+    # y = 0.01(x-350)^2 + 80: slope at x=450 is 2.0 → 63.4° vs horizontal
+    fit = _fit(0.01, -7.0, 0.01 * 350 * 350 + 80)
+    points = [_point(10, 380, 89), _point(12, 410, 116), _point(14, 430, 144)]
+    outcome = classify_shot_outcome(points, _hoop(), fit)
+    assert outcome.entry_angle_deg is not None
+    assert abs(outcome.entry_angle_deg - 63.4) < 0.5
+
+
+def test_refine_rim_bbox_finds_orange_ring_band() -> None:
+    import numpy as np
+    from swishsync_cv.config import HoopLockConfig
+    from swishsync_cv.detection.hoop_detector import refine_rim_bbox
+
+    frame = np.zeros((300, 300, 3), dtype=np.uint8)
+    # orange ring band (BGR orange ~ (0, 120, 255)) at y=100..106, x=80..200
+    frame[100:106, 80:200] = (0, 120, 255)
+    rim = refine_rim_bbox(frame, (60.0, 80.0, 220.0, 220.0), HoopLockConfig())
+    assert rim is not None
+    x1, y1, x2, y2 = rim
+    assert abs(x1 - 80) <= 2 and abs(x2 - 200) <= 2
+    assert abs(y1 - 100) <= 2 and abs(y2 - 106) <= 2
+    # no orange → None
+    assert refine_rim_bbox(frame, (0.0, 200.0, 60.0, 290.0), HoopLockConfig()) is None

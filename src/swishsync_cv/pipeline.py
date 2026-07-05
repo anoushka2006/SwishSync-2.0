@@ -478,6 +478,7 @@ def _finish_rim_rescan(candidate, hoop_lock) -> None:
         candidate.outcome,
         candidate.rim_zone_points,
         hoop_lock,
+        candidate.parabola_fit,
     )
     if candidate.outcome is None or refined != candidate.outcome:
         logger.info(

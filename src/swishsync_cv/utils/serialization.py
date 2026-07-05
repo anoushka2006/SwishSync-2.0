@@ -290,6 +290,7 @@ def shot_candidate_to_dict(candidate: ShotCandidate) -> dict[str, object]:
                 ),
                 "margin_ratio": candidate.outcome.margin_ratio,
                 "method": candidate.outcome.method,
+                "entry_angle_deg": candidate.outcome.entry_angle_deg,
             }
             if candidate.outcome is not None
             else None

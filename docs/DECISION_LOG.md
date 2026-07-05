@@ -182,3 +182,21 @@ passed. CORE untouched: all rescan state is render-only.
 
 **Baselines re-pinned** in `run_full_eval_rerun.BASELINE_RMSE` to the
 2026-07-05 manual-lock rerun (A 1.18, C 0.64, P 1.48, R 0.92, S 1.60).
+
+---
+
+## 2026-07-05 — Rim-only ring geometry + entry-angle metric
+
+**Decision:** `HoopLock.rim_bbox_xyxy` — an orange-ring-only sub-box refined
+from the HSV color mask inside the hoop bbox (`refine_rim_bbox`,
+hoop_detector.py), computed opportunistically in `HoopLockTracker.update`
+(auto locks only; manual locks keep legacy geometry). `shot_outcome` prefers
+it for ring line + x-span via `_rim_geometry`. New render-only metric
+`ShotOutcome.entry_angle_deg` — arc angle vs horizontal at the ring crossing
+from the parabola slope (Noah/Pillar research says ~45° is optimal; the
+metric is licensing-safe, their patents cover real-time feedback systems).
+Shown in the eval browser.
+
+**Verification:** 138 tests passing; outcome agreement unchanged at 14/17
+(zero wrong verdicts) with rim-only geometry active. Entry angles physically
+plausible: makes cluster 38–45°, misses scatter 19–55°.

@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 import numpy as np
 
 from swishsync_cv.config import HoopLockConfig
 from swishsync_cv.data import DetectionRecord, HoopLock
-from swishsync_cv.detection.hoop_detector import HoopCandidate, HybridHoopDetector
+from swishsync_cv.detection.hoop_detector import (
+    HoopCandidate,
+    HybridHoopDetector,
+    refine_rim_bbox,
+)
 from swishsync_cv.tracking.hoop_geometry import bbox_xywh_to_xyxy, hoop_center_from_bbox
 
 HoopPhase = Literal["acquisition", "locked", "revalidation"]
@@ -112,10 +116,18 @@ class HoopLockTracker:
             self._missed_detection_frames += 1
 
         if self._phase == "acquisition":
-            return self._update_acquisition(frame_index, best)
-        if self._phase == "revalidation":
-            return self._update_revalidation(frame_index, best)
-        return self._update_locked(frame_index, best)
+            result = self._update_acquisition(frame_index, best)
+        elif self._phase == "revalidation":
+            result = self._update_revalidation(frame_index, best)
+        else:
+            result = self._update_locked(frame_index, best)
+
+        if self._lock is not None and self._lock.rim_bbox_xyxy is None:
+            rim_bbox = refine_rim_bbox(frame, self._lock.bbox_xyxy, self.config)
+            if rim_bbox is not None:
+                self._lock = replace(self._lock, rim_bbox_xyxy=rim_bbox)
+                result = self._lock
+        return result
 
     def _update_acquisition(
         self,
