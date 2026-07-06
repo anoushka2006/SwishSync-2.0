@@ -142,6 +142,14 @@ Work autoroutes to the right model tier. Route silently; don't announce routine 
 - `dev` — active integration
 - `feature/*` — isolated experiments (current: `feature/ball-tracking`)
 
+**When to branch off:** if a piece of work is a distinct or experimental
+feature — a new subsystem (pose, court/shot-charts), a risky refactor, a model
+swap, or anything that could destabilize the current branch — create a new
+`feature/<name>` branch and develop there, rather than piling it onto the
+active branch. Small fixes and increments to the current focus stay inline.
+When you spin up a new branch, say so and note why. Merge back only through the
+production guardrail (PR → checks → explicit human "go").
+
 `videos/`, `outputs/`, `models/`, `notebooks/` are git-ignored local workspace folders.
 
 ## Decisions & Trade-offs
