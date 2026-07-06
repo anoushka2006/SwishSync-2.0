@@ -218,3 +218,26 @@ than the 4px-radius dots.
 **Verification:** outcome agreement unchanged at 14/17; CORE RMSE identical
 (A 0.76, C 0.56, P 1.19, R 0.73, S 1.10 on auto-lock); fits now exist
 mid-video on all clips with sufficient points; 138 tests pass.
+
+---
+
+## 2026-07-06 — Hoop lock freeze (static camera) + full solid arc
+
+**Decision:** `HoopLockConfig.freeze_when_locked` (default True). Once the lock
+CONVERGES (>= 6 consecutive locked frames with center drift <= 2.5px), it
+freezes: detector no longer runs, no smoothing/revalidation, position fixed.
+Fixes reported bug — hoop anchor drifting when the ball passes through the rim
+(ball+rim merge scored high, dragging the smoothed lock). Static-camera
+assumption makes this safe. Freeze only AFTER convergence: freezing at first
+confident lock (frame ~3) used a coarse box and flipped borderline verdicts.
+
+**Arc render:** `draw_finalized_arc` now draws one continuous smooth solid arc
+across the whole render span (release → rim) in the make/miss color with a dark
+underlay outline, replacing the stubby observed-segment + dotted-grey extension.
+Thickness 5 (outline 8), reads thicker than 4px dots. Both panes use it.
+
+**Verification:** 140 tests pass. CORE RMSE identical (A .76 C .57 P 1.19
+R .73 S 1.10) — freeze doesn't touch the fit. Outcome 13/17 (was 14): freeze
+flips B/C because their prior "correct" verdicts rode the anchor drift we
+removed; recovers G. Borderline geometry — own rim-only weights (task #2)
+resolve it. Net: correct behavior over a borderline metric artifact.

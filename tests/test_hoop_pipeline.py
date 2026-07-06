@@ -92,6 +92,45 @@ def test_hoop_lock_stays_stable_when_locked():
     assert abs(tracker.lock.center_x - locked_center) < 20.0
 
 
+def test_frozen_lock_ignores_later_detections_and_skips_detector():
+    tracker = HoopLockTracker(
+        HoopLockConfig(min_acquisition_observations=2, lock_confidence=0.35)
+    )
+    frame = _orange_hoop_frame()
+    hoop = _hoop_detection(0)
+    # static orange frame → lock converges → freezes after stable-frame run
+    for frame_index in range(12):
+        tracker.update(frame_index, frame, [hoop])
+    assert tracker.is_locked
+    assert tracker._frozen
+    frozen_bbox = tracker.lock.bbox_xyxy
+
+    # ball hits rim: a big jitter detection must NOT move a frozen lock, and
+    # the detector must not even run
+    tracker._detector.detect = lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("detector ran while frozen")
+    )
+    jittery = DetectionRecord(60, 0.0, "hoop", "rim", 0.95, (10.0, 5.0, 40.0, 30.0))
+    result = tracker.update(60, frame, [jittery])
+    assert result.bbox_xyxy == frozen_bbox
+
+
+def test_freeze_disabled_allows_movement():
+    tracker = HoopLockTracker(
+        HoopLockConfig(
+            min_acquisition_observations=2,
+            lock_confidence=0.35,
+            freeze_when_locked=False,
+        )
+    )
+    frame = _orange_hoop_frame()
+    for frame_index in range(3):
+        tracker.update(frame_index, frame, [_hoop_detection(0)])
+    # detector still runs when not frozen
+    tracker.update(10, frame, [_hoop_detection(10)])
+    assert tracker.is_locked
+
+
 def test_hoop_lock_revalidation_keeps_anchor_without_matching_detection():
     tracker = HoopLockTracker(HoopLockConfig(min_acquisition_observations=2, lock_confidence=0.35))
     frame = _orange_hoop_frame()

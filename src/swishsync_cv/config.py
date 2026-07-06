@@ -68,6 +68,9 @@ class HoopLockConfig:
     min_aspect_ratio: float = 0.6
     max_aspect_ratio: float = 6.0
     upper_frame_ratio: float = 0.85
+    # static-camera assumption: once confidently locked, the hoop never moves;
+    # skips smoothing/revalidation so rim contact can't drag the lock around
+    freeze_when_locked: bool = True
     manual_bbox_xywh: tuple[float, float, float, float] | None = None
     select_hoop_on_first_frame: bool = False
     select_hoop_if_unlocked: bool = False

@@ -11,6 +11,10 @@ FINAL_ARC_COLOR = (80, 220, 255)
 EXTENDED_ARC_COLOR = (120, 180, 220)
 MAKE_ARC_COLOR = (90, 210, 90)  # green (BGR)
 MISS_ARC_COLOR = (80, 80, 230)  # red (BGR)
+ARC_OUTLINE_COLOR = (25, 25, 25)  # dark edge for legibility on sky/dark bg
+
+ARC_THICKNESS = 5  # thicker than the 4px-radius trajectory dots
+ARC_OUTLINE_THICKNESS = ARC_THICKNESS + 3
 
 
 def _arc_color(shot: ShotCandidate) -> tuple[int, int, int]:
@@ -29,26 +33,16 @@ def draw_finalized_arc(frame: np.ndarray, display_shot: ShotCandidate) -> None:
 
     arc_render = display_shot.arc_render
     if arc_render is None:
-        _draw_solid_polyline(frame, fit.sample_arc(num_points=80), _arc_color(display_shot), 5)
-        return
+        arc_points = fit.sample_arc(num_points=96)
+    else:
+        # one continuous smooth arc across the whole render span (release → rim),
+        # not a stubby observed segment plus a dotted extension
+        x_min, x_max = arc_render.render_x_range
+        arc_points = fit.sample_arc_range(x_min, x_max, num_points=96)
 
-    fit_x_min, fit_x_max = arc_render.fit_x_range
-    observed_points = fit.sample_arc_range(fit_x_min, fit_x_max, num_points=64)
-    _draw_solid_polyline(frame, observed_points, _arc_color(display_shot), 5)
-
-    if not arc_render.visual_extension_used:
-        return
-
-    if arc_render.observed_segment_end is None or arc_render.extended_segment_end is None:
-        return
-
-    observed_x = arc_render.observed_segment_end[0]
-    extended_x = arc_render.extended_segment_end[0]
-    if abs(extended_x - observed_x) < 1.0:
-        return
-
-    extension_points = fit.sample_arc_range(observed_x, extended_x, num_points=24)
-    _draw_dotted_polyline(frame, extension_points, EXTENDED_ARC_COLOR, 3)
+    # dark underlay then bright colored line = crisp edge on any background
+    _draw_solid_polyline(frame, arc_points, ARC_OUTLINE_COLOR, ARC_OUTLINE_THICKNESS)
+    _draw_solid_polyline(frame, arc_points, _arc_color(display_shot), ARC_THICKNESS)
 
 
 def _draw_solid_polyline(

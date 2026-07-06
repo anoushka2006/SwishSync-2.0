@@ -18,6 +18,10 @@ from swishsync_cv.tracking.hoop_geometry import bbox_xywh_to_xyxy, hoop_center_f
 
 HoopPhase = Literal["acquisition", "locked", "revalidation"]
 
+# ponytail: freeze hardcodes, one config toggle (freeze_when_locked) is enough
+_FREEZE_STABLE_FRAMES = 6  # consecutive settled locked frames before freezing
+_FREEZE_STABILITY_PX = 2.5  # max center drift between frames to count as settled
+
 
 @dataclass
 class _HoopObservation:
@@ -43,6 +47,9 @@ class HoopLockTracker:
         self._missed_detection_frames = 0
         self._last_detection_frame = -1
         self._manual_lock = False
+        self._frozen = False
+        self._stable_locked_count = 0
+        self._last_locked_center: tuple[float, float] | None = None
 
     @property
     def is_manual_lock(self) -> bool:
@@ -103,6 +110,12 @@ class HoopLockTracker:
         if self._manual_lock:
             return self._lock
 
+        # static camera: once a confident lock exists, freeze it so rim contact
+        # (ball bouncing through the hoop) can never drag the anchor around.
+        if self._frozen and self._lock is not None:
+            self._refine_rim_bbox_once(frame)
+            return self._lock
+
         detections = yolo_hoop_detections or []
         candidates = self._detector.detect(frame, detections)
         best = candidates[0] if candidates else None
@@ -122,12 +135,47 @@ class HoopLockTracker:
         else:
             result = self._update_locked(frame_index, best)
 
-        if self._lock is not None and self._lock.rim_bbox_xyxy is None:
-            rim_bbox = refine_rim_bbox(frame, self._lock.bbox_xyxy, self.config)
-            if rim_bbox is not None:
-                self._lock = replace(self._lock, rim_bbox_xyxy=rim_bbox)
-                result = self._lock
+        if self._refine_rim_bbox_once(frame):
+            result = self._lock
+
+        self._maybe_freeze()
         return result
+
+    def _maybe_freeze(self) -> None:
+        # freeze only after the lock CONVERGES: smoothing must settle the box
+        # first, else an early coarse box gives wrong ring geometry. Require a
+        # run of near-identical locked centers before locking hard.
+        if not self.config.freeze_when_locked or self._lock is None:
+            return
+        if not (self._lock.is_locked and self._phase == "locked"):
+            self._stable_locked_count = 0
+            return
+        if self._lock.confidence < self.config.lock_confidence:
+            self._stable_locked_count = 0
+            return
+        center = (self._lock.center_x, self._lock.center_y)
+        if self._last_locked_center is not None and (
+            math_hypot(
+                center[0] - self._last_locked_center[0],
+                center[1] - self._last_locked_center[1],
+            )
+            <= _FREEZE_STABILITY_PX
+        ):
+            self._stable_locked_count += 1
+        else:
+            self._stable_locked_count = 1
+        self._last_locked_center = center
+        if self._stable_locked_count >= _FREEZE_STABLE_FRAMES:
+            self._frozen = True
+
+    def _refine_rim_bbox_once(self, frame: np.ndarray) -> bool:
+        if self._lock is None or self._lock.rim_bbox_xyxy is not None:
+            return False
+        rim_bbox = refine_rim_bbox(frame, self._lock.bbox_xyxy, self.config)
+        if rim_bbox is None:
+            return False
+        self._lock = replace(self._lock, rim_bbox_xyxy=rim_bbox)
+        return True
 
     def _update_acquisition(
         self,

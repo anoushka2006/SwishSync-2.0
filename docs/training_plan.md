@@ -8,12 +8,13 @@ with rim-only boxes and far-court coverage (fixes D/E/G unknowns).
 1. **Own clips** — `python scripts/extract_training_frames.py` writes
    annotation frames to `datasets/own_clips/images/` (rim-interaction biased).
    Annotate classes: `basketball`, `rim` (ring only — NOT the net/backboard).
-2. **CC-BY 4.0 Roboflow Universe datasets** (verify license shown on each
-   dataset page at download time; keep attribution in this file):
-   - `computer-vision-d5fjh/basketball-detection-dn6fg` — ~4.9k images,
-     person/ball/hoop, CC BY 4.0.
-   - `loganwork/basketball-rdtyv` — 366 images incl. a `Rim` class, CC BY 4.0.
-   Download via Roboflow (free account) in YOLOv8 format.
+2. **CC-BY 4.0 Roboflow Universe datasets** (attribution kept here):
+   - **FORKED** → `basketball-strategy/cv-cnfd4-eaond` (from `cv-8scak/cv-cnfd4`,
+     3666 imgs, classes basketball/people/rim, CC BY 4.0, most-downloaded).
+     Next: `versions_generate` → `versions_export` yolov8.
+   - Alt clean 2-class: `wennn/basketball-6hbv9` (1341 imgs, basketball/rim).
+   - Alt large: `basketball-hoop-tsdku/basketball-and-rim` (6270 imgs).
+   All via Roboflow MCP (workspace basketball-strategy).
 3. **Going forward:** user-collected footage (highest value: matches courts,
    lighting, angles).
 
