@@ -355,3 +355,25 @@ renders a make/miss arc; only F/J (no shot at all) have none.
 **Verification:** 156 tests pass (updated the boundary test: 3 pts insufficient,
 4 pts fits). Outcome agreement 13/17 unchanged — I/K stay correct miss. CORE
 clips have 13-24 points, unaffected by the threshold.
+
+---
+
+## 2026-07-06 — Detector-comparison tooling; trained model wiring staged
+
+**Decision:** trained yolo11n (`cv-cnfd4-eaond-1-yolo11n-t1`) wires in by path
+alone — `DetectionConfig.model_path` / `hoop_model_path` already swap models
+behind the same `Detector` interface with identical `SparseBallDetection`
+output, so no downstream change. Added `scripts/compare_detectors.py`
+(baseline vs candidate over A-S: shot rate, measured/shot, completeness, RMSE,
+confidence, detection count, fps) and `scripts/wire_and_eval.sh` handoff;
+`eval_shot_outcome.py` gained `--ball-model`.
+
+**Context / alternatives:** weight acquisition — (a) roboflow SDK download
+[rejected now: risks the opencv breakage mediapipe already caused, no MCP
+weight-download tool], (b) local retrain [slower], (c) hosted inference API
+[network per frame, detector rewrite]. Chose: user downloads the .pt from the
+Roboflow UI (opencv-safe), drops into models/, runs wire_and_eval.sh when
+laptop is on.
+
+**Trade-off:** recall / false-positive are count-based proxies until A-S get
+per-frame ball ground-truth annotation.

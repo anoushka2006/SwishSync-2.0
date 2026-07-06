@@ -31,3 +31,26 @@ with rim-only boxes and far-court coverage (fixes D/E/G unknowns).
 - Acceptance: `scripts/eval_auto_hoop.py` 19/19 locks; full-pipeline CORE gate
   vs current model; rim-detection at far court (D/E/G) above 0.35 conf near
   the ring during ball arrival.
+
+## Wiring the trained model (2026-07-06)
+
+Training finished: `basketball-strategy/cv-cnfd4-eaond-1-yolo11n-t1` (yolo11n,
+classes basketball/people/rim). The pipeline detector is pluggable by path —
+same `YoloObjectDetector` / `Detector` interface, same `SparseBallDetection`
+output — so the trained model slots in without downstream changes.
+
+**Your one manual step (opencv-safe):** in Roboflow, open the trained model ->
+Deploy -> Download Weights (ultralytics/yolov11 .pt) -> save to
+`models/hoop_ball_yolo11n.pt`. (Not automated: no MCP weight-download tool, and
+the roboflow SDK install risks clobbering opencv.)
+
+**Then, laptop on:**
+```bash
+scripts/wire_and_eval.sh          # comparison + full make/miss eval, trained weights
+```
+
+`scripts/compare_detectors.py` reports baseline vs candidate across A-S:
+shot-detection rate, measured points/shot (recall proxy), trajectory
+completeness, weighted RMSE, confidence, detection count (FP proxy), fps.
+True recall / FP need per-frame ball GT (A-S unannotated) — a future annotation
+task; the count proxies stand in meanwhile.

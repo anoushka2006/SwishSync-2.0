@@ -33,6 +33,11 @@ def main() -> None:
         "--hoop-model",
         default=str(ROOT / "models" / "hoop_ball_yolov8.pt"),
     )
+    parser.add_argument(
+        "--ball-model",
+        default="yolov8n.pt",
+        help="Ball detector weights (default stock COCO yolov8n).",
+    )
     parser.add_argument("--only", nargs="*", help="Clip labels to run (e.g. A K R)")
     args = parser.parse_args()
 
@@ -48,7 +53,10 @@ def main() -> None:
             PipelineConfig(
                 input_video=video,
                 output_dir=out_dir,
-                detection=DetectionConfig(hoop_model_path=args.hoop_model),
+                detection=DetectionConfig(
+                    model_path=args.ball_model,
+                    hoop_model_path=args.hoop_model,
+                ),
             )
         )
         shots = json.loads((out_dir / "shots.json").read_text())
