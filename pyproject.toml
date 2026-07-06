@@ -18,6 +18,8 @@ dependencies = [
 dev = [
     "pytest",
 ]
+# pose metrics use the core `ultralytics` dep (YOLO-pose). mediapipe was tried
+# first but segfaults on Python 3.13, so it is intentionally NOT a dependency.
 
 [project.scripts]
 swishsync-cv = "swishsync_cv.cli:main"

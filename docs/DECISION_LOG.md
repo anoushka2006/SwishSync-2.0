@@ -300,3 +300,27 @@ now read miss; D/E/G recover). This churn is the symptom the user flagged —
 the unlicensed model boxes the hoop inconsistently (full hoop+net vs rim) and
 orange rim-refine fails on ~half the clips. **Fix is task #2: train rim-only
 weights on the forked CC-BY dataset for one consistent box → stable geometry.**
+
+---
+
+## 2026-07-06 — Posture metrics via YOLO-pose (mediapipe pivoted out)
+
+**Decision:** shooting-form angles (elbow shoulder-elbow-wrist, knee
+hip-knee-ankle, back-bend torso-vs-vertical) from `pose/posture.py` (pure,
+pose-source-agnostic, unit-tested) fed by `pose/pose_estimator.py`.
+
+**Context / alternatives:** task asked for mediapipe (chosen for no-GPU). But
+mediapipe 0.10.35 **segfaults on Python 3.13** (exit 139 on init) and its wheel
+dragged in opencv-contrib 5.0, clobbering opencv-python. Pivoted to ultralytics
+YOLO-pose: already a core dep, CPU-only (same no-GPU reason), no crash, all 6
+joints detected at >=0.97 conf. COCO keypoints remapped to MediaPipe indices so
+`posture.py` is unchanged.
+
+**Trade-off:** YOLO-pose is a heavier model than mediapipe's lite pose, but it
+runs once per shot at the release frame (standalone `scripts/eval_posture.py`),
+NOT per frame in the core pipeline — zero detection/fit impact. Full per-frame
+overlay in the main pipeline is a later, flag-gated step. mediapipe left OUT of
+deps intentionally; revisit only on a Python where it is stable.
+
+**Note:** opencv-python is now 5.0 / numpy 2.5 (from the mediapipe install
+churn); CORE RMSE verified identical, so the bump is safe.
