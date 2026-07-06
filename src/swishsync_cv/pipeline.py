@@ -287,6 +287,10 @@ def run_pipeline(
                         buffer=rim_crop_buffer,
                         detector=hoop_detector or active_detector,
                     )
+                    # settle the verdict now from buffered evidence (the ball
+                    # often already passed the rim before finalize) so the arc
+                    # colours correctly immediately, not 48 frames later
+                    _finish_rim_rescan(rescan_candidate, hoop_tracker.lock)
 
                 elif rescan_frames_left > 0 and rescan_candidate is not None:
                     _collect_rim_zone_point(
@@ -297,10 +301,12 @@ def run_pipeline(
                         hoop_lock=hoop_tracker.lock,
                         detector=hoop_detector or active_detector,
                     )
+                    # re-settle every frame so the arc colour flips the moment
+                    # the decisive rim crossing lands, not at window end
+                    _finish_rim_rescan(rescan_candidate, hoop_tracker.lock)
                 if rescan_frames_left > 0 and rescan_candidate is not None:
                     rescan_frames_left -= 1
                     if rescan_frames_left == 0:
-                        _finish_rim_rescan(rescan_candidate, hoop_tracker.lock)
                         rescan_candidate = None
 
                 left_panel = render_debug_panel(

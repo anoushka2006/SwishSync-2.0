@@ -50,6 +50,7 @@ class ShotCandidateManager:
         self._pre_shot_buffer: list[SparseBallDetection] = []
         self._frames_since_point = 0
         self._floor_bounce_streak = 0
+        self._consecutive_interpolated = 0
         self._interpolated_ignored_count = 0
         self._last_hoop_lock: HoopLock | None = None
         self._pending_finalize_reason: ShotFinalizeReason | None = None
@@ -182,10 +183,18 @@ class ShotCandidateManager:
             self._try_start_collection()
             return None
 
-        self._frames_since_point = 0
         if point.interpolated:
             self._interpolated_ignored_count += 1
+            # a long run of synthetic gap-fill points means the real ball is
+            # gone; without this the candidate never finalizes mid-video (idle
+            # timer keeps resetting) and the fitted arc only appears post-loop
+            self._consecutive_interpolated += 1
+            if self._consecutive_interpolated >= self.config.reacquisition_gap_frames:
+                self._pending_finalize_reason = "idle"
+                return self._finalize_active()
         else:
+            self._frames_since_point = 0
+            self._consecutive_interpolated = 0
             if self._should_finalize_on_long_gap(point):
                 self._pending_finalize_reason = "unknown"
                 finalized = self._finalize_active()
@@ -309,6 +318,7 @@ class ShotCandidateManager:
         self.active.continuity_points.extend(measured_seeds)
         self._frames_since_point = 0
         self._floor_bounce_streak = 0
+        self._consecutive_interpolated = 0
         self._pre_shot_buffer.clear()
         logger.info(
             "shot started frame=%s seed_points=%s",
@@ -608,6 +618,7 @@ class ShotCandidateManager:
         self.active = None
         self._frames_since_point = 0
         self._floor_bounce_streak = 0
+        self._consecutive_interpolated = 0
         self._interpolated_ignored_count = 0
         self.post_shot_debug_points.clear()
         self._cooldown = FinalizeCooldownState(

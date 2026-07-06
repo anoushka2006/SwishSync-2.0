@@ -241,3 +241,23 @@ R .73 S 1.10) — freeze doesn't touch the fit. Outcome 13/17 (was 14): freeze
 flips B/C because their prior "correct" verdicts rode the anchor drift we
 removed; recovers G. Borderline geometry — own rim-only weights (task #2)
 resolve it. Net: correct behavior over a borderline metric artifact.
+
+---
+
+## 2026-07-06 — Mid-video arc rendering + live verdict colour
+
+**Two bugs behind "arc not rendering / wrong colour":**
+1. Immortal candidate: after the ball is lost, the pipeline emits interpolated
+   gap-fill points every frame; these reset the idle timer and are never added
+   or floor-excluded, so the candidate never finalized until end-of-video and
+   the fitted arc was computed post-loop (never drawn). Fix: cap consecutive
+   interpolated points at `reacquisition_gap_frames` (15) → finalize (idle).
+2. Stale arc colour: make/miss verdict is settled by the rim re-scan, which
+   only re-refined at window end (finalize+48). A make decided mid-window
+   showed red until then. Fix: re-refine every frame as rim-zone points arrive
+   (refine is a cheap list scan) + settle once from buffered crops at finalize.
+
+**Result:** finalized arc now renders mid-clip (L: from ~frame 85, was never),
+full solid smooth arc, correct green/miss-red the moment the crossing lands.
+Outcome agreement 14/17 unchanged; 140 tests pass; candidate_points membership
+identical (interpolated never entered the fit) so fits unchanged.
