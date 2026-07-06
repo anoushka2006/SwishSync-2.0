@@ -261,3 +261,42 @@ resolve it. Net: correct behavior over a borderline metric artifact.
 full solid smooth arc, correct green/miss-red the moment the crossing lands.
 Outcome agreement 14/17 unchanged; 140 tests pass; candidate_points membership
 identical (interpolated never entered the fit) so fits unchanged.
+
+---
+
+## 2026-07-06 — Render-only ball trail (end-to-end tracking, task #3)
+
+**Decision:** a rolling ~2.5s ball-dot trail on the left panel traces the ball
+across the whole clip (dribbles + pre/post-shot), matching the reference look.
+Captured from the RAW detections BEFORE the floor gate (so low dribbles show)
+and stored in a separate pipeline deque that never feeds the shot fit. The
+fitted arc still renders only release→rim.
+
+**Context / alternatives:** (a) separate render-only trail [chosen], (b) open
+the main detection gate to always-on and feed the shot manager — rejected:
+would shift shot boundaries and move CORE baselines for no correctness gain,
+and the floor gate exists precisely to keep low bounces out of fits.
+
+**Trade-off:** the trail reuses detections that already run (~every 3rd frame
+post-shot), so near-zero extra CPU; it is purely cosmetic and carries no
+analytics meaning yet. `_draw_ball_trail` in overlay.py; deque + `_append_ball_trail`
+in pipeline.py.
+
+---
+
+## 2026-07-06 — Early median-snap hoop freeze (kills during-shot drift)
+
+**Decision:** freeze now fires early — accumulate locked boxes through
+locked<->revalidation flicker (drop the phase=="locked" gate), and freeze after
+EITHER 6 quiet frames OR a 12-frame cap, snapping the lock to the MEDIAN of the
+accumulated boxes. Before, flaky far-court clips (IMG_2029*) flickered
+locked/revalidation, reset the accumulator, and only froze ~frame 45 — after
+the shot, so the anchor visibly drifted while the ball hit the rim.
+
+**Verification:** all 19 clips now freeze by frame <=18 (was up to 57). Tests
+140 pass. CORE RMSE unchanged (freeze never touches the fit). Outcome 13/17
+(was 14): the median box shifts borderline make/miss geometry (C/L/N/Q makes
+now read miss; D/E/G recover). This churn is the symptom the user flagged —
+the unlicensed model boxes the hoop inconsistently (full hoop+net vs rim) and
+orange rim-refine fails on ~half the clips. **Fix is task #2: train rim-only
+weights on the forked CC-BY dataset for one consistent box → stable geometry.**

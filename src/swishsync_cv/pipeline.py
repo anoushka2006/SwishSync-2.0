@@ -35,6 +35,8 @@ RIM_RESCAN_FRAMES = 48  # post-finalize window re-scanned for the ball at the ri
 # (early-finalized shots reach the rim 20-40 frames after finalize)
 RIM_RESCAN_BUFFER_FRAMES = 72  # rolling rim-crop buffer for shots that only
 # finalize long after flight end (reacquisition wait / end of video)
+BALL_TRAIL_WINDOW_SECONDS = 2.5  # render-only rolling ball-dot trail length
+BALL_TRAIL_MAXLEN = 240  # bound trail memory during dense collection
 RIM_RESCAN_MIN_CONFIDENCE = 0.35  # real balls score 0.85+; static rim clutter ~0.2
 
 
@@ -121,6 +123,10 @@ def run_pipeline(
         rescan_frames_left = 0
         seen_finalized = 0
         rim_crop_buffer: deque = deque(maxlen=RIM_RESCAN_BUFFER_FRAMES)
+        # render-only ball-dot trail (dribbles + pre/post-shot); bypasses the
+        # floor gate so low dribbles show, never feeds the shot fit
+        ball_trail: deque = deque(maxlen=BALL_TRAIL_MAXLEN)
+        trail_window_frames = int(reader.metadata.fps * BALL_TRAIL_WINDOW_SECONDS)
 
         with VideoWriter(
             output_path=config.output_video_path,
@@ -161,6 +167,9 @@ def run_pipeline(
                         frame_index=packet.index,
                         timestamp_ms=packet.timestamp_ms,
                     )
+                    # capture the raw ball center for the trail BEFORE the floor
+                    # gate drops low dribbles
+                    _append_ball_trail(ball_trail, detections, packet.index)
                     detections = filter_basketball_detections(
                         detections,
                         hoop_lock=hoop_tracker.lock,
@@ -323,6 +332,11 @@ def run_pipeline(
                     candidate_point_count=shot_manager.candidate_point_count,
                     display_shot=shot_manager.display_shot,
                     preview_pickup_points=shot_manager.preview_pickup_points(),
+                    ball_trail=[
+                        (fx, x, y)
+                        for (fx, x, y) in ball_trail
+                        if packet.index - fx <= trail_window_frames
+                    ],
                 )
                 right_panel = render_trajectory_panel(
                     frame_size=reader.metadata.frame_size,
@@ -381,6 +395,17 @@ def run_pipeline(
         sparse_detection_count=len(sparse_detections),
         shot_count=len(shot_manager.finalized_shots),
     )
+
+
+def _append_ball_trail(ball_trail, detections, frame_index: int) -> None:
+    """Record the highest-confidence raw ball center for the render-only trail."""
+
+    balls = [d for d in detections if d.label == "basketball"]
+    if not balls:
+        return
+    best = max(balls, key=lambda d: d.confidence)
+    cx, cy = best.center
+    ball_trail.append((frame_index, cx, cy))
 
 
 def _rim_crop_bounds(hoop_lock, frame_shape) -> tuple[int, int, int, int]:

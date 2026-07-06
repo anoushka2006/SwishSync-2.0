@@ -143,3 +143,11 @@ Work autoroutes to the right model tier. Route silently; don't announce routine 
 - `feature/*` — isolated experiments (current: `feature/ball-tracking`)
 
 `videos/`, `outputs/`, `models/`, `notebooks/` are git-ignored local workspace folders.
+
+## Decisions & Trade-offs
+
+Engineering decisions and their trade-offs are logged reverse-chronologically in
+[docs/DECISION_LOG.md](docs/DECISION_LOG.md). Add an entry there when a choice
+would confuse a future session if left unexplained. Automations: see
+[docs/automations.md](docs/automations.md). Own-weights training: see
+[docs/training_plan.md](docs/training_plan.md).

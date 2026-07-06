@@ -9,6 +9,7 @@ from swishsync_cv.config import VideoOutputConfig
 from swishsync_cv.data import DetectionRecord, HoopLock, ShotCandidate, SparseBallDetection
 from swishsync_cv.visualization.shot_story_drawing import draw_pickup_preview, draw_shot_story
 
+BALL_TRAIL_COLOR = (170, 170, 170)  # faint grey dribble/pre/post trail
 BASKETBALL_COLOR = (0, 140, 255)
 HOOP_CANDIDATE_COLOR = (255, 120, 80)
 HOOP_LOCK_COLOR = (80, 220, 120)
@@ -31,10 +32,13 @@ def render_debug_panel(
     candidate_point_count: int = 0,
     display_shot: ShotCandidate | None = None,
     preview_pickup_points: list[SparseBallDetection] | None = None,
+    ball_trail: list[tuple[int, float, float]] | None = None,
 ) -> np.ndarray:
     """Return left panel with original video and debug overlays."""
 
     panel = frame.copy()
+    if ball_trail:
+        _draw_ball_trail(panel, ball_trail)
     visible_detections = _filter_detections_for_display(detections, hoop_lock)
     _draw_detections(panel, visible_detections, draw_confidence=config.draw_confidence)
     if hoop_lock is not None:
@@ -249,3 +253,25 @@ def _draw_debug_hud(
             cv2.LINE_AA,
         )
         y_offset += 22
+
+
+def _draw_ball_trail(
+    panel: np.ndarray,
+    ball_trail: list[tuple[int, float, float]],
+) -> None:
+    """Draw the render-only ball-dot trail (dribbles + pre/post-shot), oldest faintest."""
+
+    if not ball_trail:
+        return
+    ordered = sorted(ball_trail, key=lambda item: item[0])
+    n = len(ordered)
+    overlay = panel.copy()
+    for index, (_frame_index, x, y) in enumerate(ordered):
+        # newest dots brighter/bigger; skip the very newest (current ball drawn
+        # separately as the live detection marker)
+        if index == n - 1:
+            continue
+        recency = (index + 1) / n
+        radius = 2 if recency < 0.6 else 3
+        cv2.circle(overlay, (int(round(x)), int(round(y))), radius, BALL_TRAIL_COLOR, -1, cv2.LINE_AA)
+    cv2.addWeighted(overlay, 0.55, panel, 0.45, 0, panel)

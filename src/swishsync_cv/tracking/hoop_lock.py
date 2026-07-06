@@ -21,6 +21,8 @@ HoopPhase = Literal["acquisition", "locked", "revalidation"]
 # ponytail: freeze hardcodes, one config toggle (freeze_when_locked) is enough
 _FREEZE_STABLE_FRAMES = 6  # consecutive settled locked frames before freezing
 _FREEZE_STABILITY_PX = 2.5  # max center drift between frames to count as settled
+_FREEZE_MAX_LOCKED_FRAMES = 12  # hard cap: freeze to median box even if jittery,
+# so a wobbly detector box can't keep smoothing into shot time
 
 
 @dataclass
@@ -50,6 +52,7 @@ class HoopLockTracker:
         self._frozen = False
         self._stable_locked_count = 0
         self._last_locked_center: tuple[float, float] | None = None
+        self._locked_box_samples: list[tuple[float, float, float, float]] = []
 
     @property
     def is_manual_lock(self) -> bool:
@@ -142,16 +145,18 @@ class HoopLockTracker:
         return result
 
     def _maybe_freeze(self) -> None:
-        # freeze only after the lock CONVERGES: smoothing must settle the box
-        # first, else an early coarse box gives wrong ring geometry. Require a
-        # run of near-identical locked centers before locking hard.
+        # freeze after the lock settles, snapping to the MEDIAN of the locked
+        # boxes so a wobbly detector box can't keep smoothing into shot time.
+        # Two triggers: a quiet run (6 near-identical frames) or a hard frame
+        # cap (12) — whichever comes first. Median rejects jitter outliers.
         if not self.config.freeze_when_locked or self._lock is None:
             return
-        if not (self._lock.is_locked and self._phase == "locked"):
+        # accumulate whenever a lock EXISTS, through locked<->revalidation
+        # flicker (flaky far-court detection): resetting on every flicker means
+        # jittery clips never freeze until the churn stops, well into shot time.
+        if not self._lock.is_locked:
             self._stable_locked_count = 0
-            return
-        if self._lock.confidence < self.config.lock_confidence:
-            self._stable_locked_count = 0
+            self._locked_box_samples.clear()
             return
         center = (self._lock.center_x, self._lock.center_y)
         if self._last_locked_center is not None and (
@@ -165,8 +170,29 @@ class HoopLockTracker:
         else:
             self._stable_locked_count = 1
         self._last_locked_center = center
-        if self._stable_locked_count >= _FREEZE_STABLE_FRAMES:
-            self._frozen = True
+        self._locked_box_samples.append(self._lock.bbox_xyxy)
+        if (
+            self._stable_locked_count >= _FREEZE_STABLE_FRAMES
+            or len(self._locked_box_samples) >= _FREEZE_MAX_LOCKED_FRAMES
+        ):
+            self._freeze_to_median()
+
+    def _freeze_to_median(self) -> None:
+        import statistics
+
+        samples = self._locked_box_samples
+        median_box = tuple(
+            statistics.median(sample[i] for sample in samples) for i in range(4)
+        )
+        center_x = (median_box[0] + median_box[2]) / 2.0
+        center_y = (median_box[1] + median_box[3]) / 2.0
+        self._lock = replace(
+            self._lock,
+            bbox_xyxy=median_box,
+            center_x=center_x,
+            center_y=center_y,
+        )
+        self._frozen = True
 
     def _refine_rim_bbox_once(self, frame: np.ndarray) -> bool:
         if self._lock is None or self._lock.rim_bbox_xyxy is not None:
