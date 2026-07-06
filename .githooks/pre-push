@@ -13,9 +13,9 @@ else
   CHANGED=$(git diff --name-only HEAD~1 2>/dev/null || echo "")
 fi
 
-if ! echo "$CHANGED" | grep -qE '^src/swishsync_cv/(tracking|detection)/'; then
+if ! echo "$CHANGED" | grep -qE '^src/swishsync_cv/((tracking|detection)/|config\.py|pipeline\.py)'; then
   exit 0
 fi
 
-echo "pre-push: tracking/detection changed → CORE drift check"
+echo "pre-push: pipeline code changed → CORE drift check"
 python scripts/check_core_drift.py
