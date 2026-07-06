@@ -324,3 +324,20 @@ deps intentionally; revisit only on a Python where it is stable.
 
 **Note:** opencv-python is now 5.0 / numpy 2.5 (from the mediapipe install
 churn); CORE RMSE verified identical, so the bump is safe.
+
+---
+
+## 2026-07-06 — Shot charts with confirm-step court calibration (task #5)
+
+**Decision:** `court/homography.py` (image->court-plane projection from >=4
+clicked point pairs) + `court/shot_chart.py` (half-court render, green makes /
+red misses). Shooter court position = ankle midpoint from YOLO-pose at the
+release frame, projected via the calibration. Calibration is a one-time
+per-camera CONFIRM-STEP (`scripts/calibrate_court.py`: click known court points,
+enter their feet coords), NOT automatic — auto leg-projection court mapping is
+NEX Team patented (US 11594029), so a human confirm step is safer and
+licensing-clean. Wiring: `scripts/build_shot_chart.py`.
+
+**Trade-off:** requires a manual calibration per court setup (a few clicks
+once). Real charts for the Testing clips await that calibration; the math +
+renderer are unit-tested (13 tests) and the demo chart renders correctly.
