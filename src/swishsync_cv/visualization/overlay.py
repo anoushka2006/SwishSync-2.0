@@ -9,6 +9,8 @@ from swishsync_cv.config import VideoOutputConfig
 from swishsync_cv.data import DetectionRecord, HoopLock, ShotCandidate, SparseBallDetection
 from swishsync_cv.visualization.shot_story_drawing import draw_pickup_preview, draw_shot_story
 
+__all__ = ["render_debug_panel", "draw_posture_overlay", "HOOP_LOCK_COLOR"]
+
 BALL_TRAIL_COLOR = (170, 170, 170)  # faint grey dribble/pre/post trail
 BASKETBALL_COLOR = (0, 140, 255)
 HOOP_CANDIDATE_COLOR = (255, 120, 80)
@@ -275,3 +277,31 @@ def _draw_ball_trail(
         radius = 2 if recency < 0.6 else 3
         cv2.circle(overlay, (int(round(x)), int(round(y))), radius, BALL_TRAIL_COLOR, -1, cv2.LINE_AA)
     cv2.addWeighted(overlay, 0.55, panel, 0.45, 0, panel)
+
+
+_POSE_SKELETON = [(11, 13), (13, 15), (12, 14), (14, 16), (11, 23), (12, 24),
+                  (23, 25), (25, 27), (24, 26), (26, 28), (11, 12), (23, 24)]
+
+
+def draw_posture_overlay(panel, landmarks, metrics) -> None:
+    """Draw shooter skeleton + elbow/knee/back angles on the left panel."""
+
+    if landmarks:
+        for a, b in _POSE_SKELETON:
+            if a in landmarks and b in landmarks:
+                pa, pb = landmarks[a], landmarks[b]
+                cv2.line(panel, (int(pa[0]), int(pa[1])), (int(pb[0]), int(pb[1])),
+                         (0, 255, 0), 2, cv2.LINE_AA)
+        for x, y, *_ in landmarks.values():
+            cv2.circle(panel, (int(x), int(y)), 4, (0, 200, 255), -1, cv2.LINE_AA)
+    if metrics is None:
+        return
+    lines = [
+        f"Elbow: {metrics.elbow_angle_deg:.0f} deg" if metrics.elbow_angle_deg else "Elbow: --",
+        f"Knee:  {metrics.knee_bend_deg:.0f} deg" if metrics.knee_bend_deg else "Knee: --",
+        f"Back:  {metrics.back_bend_deg:.0f} deg" if metrics.back_bend_deg else "Back: --",
+    ]
+    y0 = panel.shape[0] - 150
+    for i, text in enumerate(lines):
+        cv2.putText(panel, text, (20, y0 + i * 34), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.9, (40, 220, 40), 2, cv2.LINE_AA)

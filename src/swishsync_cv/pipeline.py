@@ -27,7 +27,7 @@ from swishsync_cv.utils import (
     write_finalized_shots_json,
 )
 from swishsync_cv.visualization.dual_pane import compose_dual_pane, render_trajectory_panel
-from swishsync_cv.visualization.overlay import render_debug_panel
+from swishsync_cv.visualization.overlay import draw_posture_overlay, render_debug_panel
 
 logger = logging.getLogger("swishsync_cv.pipeline")
 
@@ -123,6 +123,13 @@ def run_pipeline(
         rescan_frames_left = 0
         seen_finalized = 0
         rim_crop_buffer: deque = deque(maxlen=RIM_RESCAN_BUFFER_FRAMES)
+        pose_estimator = None
+        last_posture: tuple = (None, None)
+        if config.video_output.draw_posture:
+            from swishsync_cv.pose.pose_estimator import PoseEstimator
+            from swishsync_cv.pose.posture import compute_posture  # noqa: F401
+
+            pose_estimator = PoseEstimator()
         # render-only ball-dot trail (dribbles + pre/post-shot); bypasses the
         # floor gate so low dribbles show, never feeds the shot fit
         ball_trail: deque = deque(maxlen=BALL_TRAIL_MAXLEN)
@@ -338,6 +345,14 @@ def run_pipeline(
                         if packet.index - fx <= trail_window_frames
                     ],
                 )
+                if pose_estimator is not None:
+                    if packet.index % config.video_output.posture_stride == 0:
+                        landmarks = pose_estimator.landmarks(packet.image)
+                        posture = (
+                            compute_posture(landmarks) if landmarks is not None else None
+                        )
+                        last_posture = (landmarks, posture)
+                    draw_posture_overlay(left_panel, *last_posture)
                 right_panel = render_trajectory_panel(
                     frame_size=reader.metadata.frame_size,
                     collecting_shot=shot_manager.active,

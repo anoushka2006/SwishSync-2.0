@@ -69,6 +69,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Disable dual-pane output and write debug panel only.",
     )
     parser.add_argument(
+        "--draw-posture",
+        action="store_true",
+        help="Overlay shooter skeleton + elbow/knee/back angles (needs YOLO-pose).",
+    )
+    parser.add_argument(
         "--save-debug-frames",
         action="store_true",
         help="Save periodic annotated JPEG frames for inspection.",
@@ -130,6 +135,7 @@ def main() -> None:
         shot_candidate=ShotCandidateConfig(),
         video_output=VideoOutputConfig(
             dual_pane=not args.no_dual_pane,
+            draw_posture=args.draw_posture,
             save_debug_frames=args.save_debug_frames,
             debug_frame_stride=args.debug_frame_stride,
         ),

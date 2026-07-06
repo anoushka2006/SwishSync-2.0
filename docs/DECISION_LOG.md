@@ -355,3 +355,18 @@ renders a make/miss arc; only F/J (no shot at all) have none.
 **Verification:** 156 tests pass (updated the boundary test: 3 pts insufficient,
 4 pts fits). Outcome agreement 13/17 unchanged — I/K stay correct miss. CORE
 clips have 13-24 points, unaffected by the threshold.
+
+---
+
+## 2026-07-06 — Live posture overlay in the pipeline (feature/pose-overlay)
+
+**Decision:** flag-gated per-frame posture overlay. `VideoOutputConfig.draw_posture`
+(default False) + CLI `--draw-posture`; when on, the pipeline lazily builds a
+YOLO-pose estimator, runs it every `posture_stride` (default 2) frames, reuses
+landmarks between, and draws the shooter skeleton + elbow/knee/back angles on
+the left panel. Developed on `feature/pose-overlay` (distinct subsystem, per the
+branch signal).
+
+**Trade-off:** pose per frame roughly doubles processing time, so it is OFF by
+default — eval, CORE, and normal runs are byte-identical (flag off short-circuits
+before any pose work). On only for form-analysis renders. 156 tests pass.

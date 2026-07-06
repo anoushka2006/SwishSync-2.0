@@ -164,6 +164,8 @@ class VideoOutputConfig:
     save_debug_frames: bool = False
     debug_frame_stride: int = 30
     dual_pane: bool = True
+    draw_posture: bool = False  # live shooter skeleton + elbow/knee/back overlay
+    posture_stride: int = 2  # run pose every N frames (cost control), reuse between
     right_panel_background: tuple[int, int, int] = (24, 24, 28)
     show_shot_history: bool = True
     shot_story: ShotStoryConfig = field(default_factory=ShotStoryConfig)
