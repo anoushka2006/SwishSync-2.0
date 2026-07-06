@@ -54,3 +54,16 @@ shot-detection rate, measured points/shot (recall proxy), trajectory
 completeness, weighted RMSE, confidence, detection count (FP proxy), fps.
 True recall / FP need per-frame ball GT (A-S unannotated) — a future annotation
 task; the count proxies stand in meanwhile.
+
+## Baseline weights convention (2026-07-06)
+
+Keep a frozen baseline detector to measure every future model against:
+- `models/hoop_ball_yolov8_baseline.pt` — the original avishah3 weights
+  (classes Basketball / Basketball Hoop). **Never overwrite.** Recreate if lost:
+  `curl -sL -o models/hoop_ball_yolov8_baseline.pt \
+   https://github.com/avishah3/AI-Basketball-Shot-Detection-Tracker/raw/master/best.pt`
+- `models/hoop_ball_yolov8.pt` — current candidate/active detector (iterated).
+
+Benchmark a new detector vs the frozen baseline:
+`python scripts/run_detector_benchmark.py` — per-clip shot/measured/RMSE/verdict,
+plus IMPROVED / REGRESSED / STILL FAILING / CORE-worse summary.
