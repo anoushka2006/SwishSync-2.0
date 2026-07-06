@@ -341,3 +341,17 @@ licensing-clean. Wiring: `scripts/build_shot_chart.py`.
 **Trade-off:** requires a manual calibration per court setup (a few clicks
 once). Real charts for the Testing clips await that calibration; the math +
 renderer are unit-tested (13 tests) and the demo chart renders correctly.
+
+---
+
+## 2026-07-06 — Lower fit threshold to 4 points (arc on short shots)
+
+**Decision:** `min_measured_points_for_fit` 5 -> 4. Clips I and K had 4 clean
+flight points, below the old threshold, so they got no parabola fit and no
+colored arc. A quadratic needs only 3 points; 4 gives one DOF of robustness
+(clip I fits at r2=1.00, rmse 1.4px). Now every clip with a detected shot
+renders a make/miss arc; only F/J (no shot at all) have none.
+
+**Verification:** 156 tests pass (updated the boundary test: 3 pts insufficient,
+4 pts fits). Outcome agreement 13/17 unchanged — I/K stay correct miss. CORE
+clips have 13-24 points, unaffected by the threshold.

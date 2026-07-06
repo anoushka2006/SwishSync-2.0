@@ -117,7 +117,9 @@ class ShotCandidateConfig:
     post_rim_measured_cap: int = 5
     max_idle_frames: int = 8
     min_validated_points_for_fit: int = 4
-    min_measured_points_for_fit: int = 5
+    # a quadratic needs only 3 points; 4 gives one DOF of robustness. Lets
+    # short-but-clean shots (e.g. clips I/K, 4 flight points) still render an arc.
+    min_measured_points_for_fit: int = 4
     reacquisition_gap_frames: int = 15
     horizontal_jump_end_px: float = 60.0
     post_finalize_cooldown_frames: int = 25

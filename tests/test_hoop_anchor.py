@@ -45,15 +45,8 @@ def test_rim_anchor_pulls_parabola_toward_hoop():
     assert any(point.frame_index == RIM_ANCHOR_FRAME_INDEX for point in anchored_diag.points)
 
 
-def test_finalize_requires_five_measured_points():
-    candidate = ShotCandidate(start_frame=0, state="collecting_shot", end_frame=3)
-    candidate.candidate_points = [
-        SparseBallDetection(0, 0.0, 10.0, 80.0, 0.9),
-        SparseBallDetection(1, 33.3, 30.0, 60.0, 0.9),
-        SparseBallDetection(2, 66.6, 50.0, 45.0, 0.9),
-        SparseBallDetection(3, 99.9, 70.0, 40.0, 0.9),
-    ]
-    hoop = HoopLock(
+def _anchor_hoop() -> HoopLock:
+    return HoopLock(
         center_x=80.0,
         center_y=20.0,
         bbox_xyxy=(60.0, 0.0, 100.0, 40.0),
@@ -62,15 +55,38 @@ def test_finalize_requires_five_measured_points():
         is_locked=True,
     )
 
-    finalized = finalize_shot(
-        candidate,
-        ShotCandidateConfig(),
-        hoop_lock=hoop,
-        hoop_lock_config=HoopLockConfig(),
-    )
 
+def test_finalize_insufficient_below_four_measured_points():
+    # 3 points is below min_measured_points_for_fit (4) → no fit
+    candidate = ShotCandidate(start_frame=0, state="collecting_shot", end_frame=2)
+    candidate.candidate_points = [
+        SparseBallDetection(0, 0.0, 10.0, 80.0, 0.9),
+        SparseBallDetection(1, 33.3, 30.0, 60.0, 0.9),
+        SparseBallDetection(2, 66.6, 50.0, 45.0, 0.9),
+    ]
+    finalized = finalize_shot(
+        candidate, ShotCandidateConfig(),
+        hoop_lock=_anchor_hoop(), hoop_lock_config=HoopLockConfig(),
+    )
     assert finalized.insufficient_points_for_fit is True
     assert finalized.parabola_fit is None
+
+
+def test_finalize_fits_with_four_measured_points():
+    # 4 clean flight points now render an arc (short shots like clips I/K)
+    candidate = ShotCandidate(start_frame=0, state="collecting_shot", end_frame=3)
+    candidate.candidate_points = [
+        SparseBallDetection(0, 0.0, 10.0, 80.0, 0.9),
+        SparseBallDetection(1, 33.3, 30.0, 60.0, 0.9),
+        SparseBallDetection(2, 66.6, 50.0, 45.0, 0.9),
+        SparseBallDetection(3, 99.9, 70.0, 40.0, 0.9),
+    ]
+    finalized = finalize_shot(
+        candidate, ShotCandidateConfig(),
+        hoop_lock=_anchor_hoop(), hoop_lock_config=HoopLockConfig(),
+    )
+    assert finalized.insufficient_points_for_fit is False
+    assert finalized.parabola_fit is not None
 
 
 def test_finalize_fits_with_five_points_and_locked_hoop():
