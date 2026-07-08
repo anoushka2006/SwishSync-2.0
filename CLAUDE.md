@@ -152,10 +152,73 @@ production guardrail (PR → checks → explicit human "go").
 
 `videos/`, `outputs/`, `models/`, `notebooks/` are git-ignored local workspace folders.
 
+## Operating manual
+
+How work actually gets done here. Roadmap with milestones + success metrics:
+[docs/ROADMAP.md](docs/ROADMAP.md). Ship ritual: the `/milestone` skill.
+Detector evaluation: `/detector-bench`. Clip visual debugging: `/diagnose-clip`.
+
+### Working conventions
+
+- **Reply style:** caveman (terse, no filler) unless the user turns it off.
+  Code style: ponytail — laziest correct solution, stdlib first, `ponytail:`
+  comments on deliberate ceilings. Commits/PRs/docs: normal prose.
+- **Milestone = commit + push** to the feature branch with a plain-English
+  message ending in the Co-Authored-By line. Merges and PRs NEVER happen
+  without an explicit user "go" — a standing "push at milestones" covers
+  feature-branch pushes only.
+- **Money, credits, new deps, destructive ops, ground-truth labels: ask.**
+  Everything else with an obvious default: do it and say what you chose.
+- **Long runs go to background** (`run_in_background`), full output written to
+  a scratchpad file, filtered on read. Never poll with sleep chains.
+- **Every clip-visible claim is verified visually** — extract the frame and
+  look at it before telling the user something renders.
+- **New external-library code:** check current docs via context7 first.
+  Reusing an in-repo adapter needs no check.
+- **New subsystem / risky experiment → new `feature/<name>` branch** (see
+  Branch workflow). Small fixes stay inline.
+- **Subagents: don't.** A spawn burned an entire session limit producing
+  nothing. Build inline; spawn only if the user explicitly asks.
+
+### Failure modes — named, with the rule that prevents each
+
+| # | Failure mode | What it looks like | Preventing rule |
+|---|---|---|---|
+| 1 | **The Wholesale Swap** | New detector swapped for ball+hoop at once; CORE RMSE 0.76→15.4 | Change ONE variable: bench new models per-class (hoop-only, then ball-only), CORE-gate each before combining |
+| 2 | **The Eager Freeze** | Hoop frozen at first confident lock (frame 3, coarse box); verdicts churned | Converge, then freeze: accumulate locked boxes, snap to median; verify freeze ≤ frame 18 on all clips |
+| 3 | **Render bleeding into fit** | "Just let the trail/outcome feed the fitter" | Hard invariants section is law. New fields default render-only; fit-input changes need the CORE gate + explicit user approval (see M7 ceremony) |
+| 4 | **Silent baseline re-pin** | Re-pinning `BASELINE_RMSE` to make red green | Baselines re-pin ONLY with a DECISION_LOG entry naming the approved cause |
+| 5 | **Metric chasing** | Reverting a correct fix because agreement dropped 14→13 when the lost verdicts rode the bug | Investigate every flip before optimizing it; mechanism correctness beats a borderline metric |
+| 6 | **The Overwrite** | Weights file replaced in place; baseline lost | `*_baseline.pt` files are immutable; new models get NEW filenames; recreate-command lives in training_plan.md |
+| 7 | **Dependency clobber** | `pip install mediapipe` silently replaced opencv; 20 tests broke | Any install touching opencv/numpy → rerun `pytest` AND `check_core_drift.py` before proceeding |
+| 8 | **Zombie candidate** | "Arc doesn't render" — shot never finalized mid-video | Any missing-render report → check the finalize reason in the logs FIRST (`floor_idle`/`idle`/`end_of_video`) |
+| 9 | **Grep-eaten evidence** | Piping a run through grep into the task file → empty log, wasted run | Write FULL output to a scratchpad file; filter when reading |
+| 10 | **Assumed ground truth** | Visually-derived make/miss labels; user corrected 3 of them | Derived labels are provisional; only user-confirmed labels enter `OUTCOME_GROUND_TRUTH` |
+| 11 | **Un-gated commit** | Committing/merging without the user seeing a summary | Plain-English summary from the actual diff → wait for "go" (or a standing, scoped authorization) |
+| 12 | **Stale-API confidence** | Writing against a remembered external API | context7 for current docs before new external-library code |
+
+### Quality bars — checkable, run before calling anything done
+
+```bash
+pytest -q                              # bar: 100% pass (156+ tests)
+python scripts/check_core_drift.py    # bar: every CORE clip |ΔRMSE| ≤ 0.15 vs pins
+python scripts/eval_shot_outcome.py   # bar: wrong-verdict count must not increase
+                                      #      (unknowns tolerated; wrong verdicts not)
+python scripts/run_detector_benchmark.py  # detector changes only: vs frozen baseline
+```
+
+- Arc bar: every shot with ≥ 4 flight points has `parabola_fit` non-null and
+  `insufficient_points_for_fit` false in shots.json.
+- Hoop bar: 19/19 clips frozen by frame ≤ 18 (benchmark prints it).
+- Ship bar: DECISION_LOG entry for anything a future session would re-litigate;
+  tests added for every behavior change; browser rebuilt if artifacts changed.
+- Honesty bar: report failures with output verbatim; `unknown` > wrong verdict.
+
 ## Decisions & Trade-offs
 
 Engineering decisions and their trade-offs are logged reverse-chronologically in
 [docs/DECISION_LOG.md](docs/DECISION_LOG.md). Add an entry there when a choice
 would confuse a future session if left unexplained. Automations: see
 [docs/automations.md](docs/automations.md). Own-weights training: see
-[docs/training_plan.md](docs/training_plan.md).
+[docs/training_plan.md](docs/training_plan.md). Roadmap: see
+[docs/ROADMAP.md](docs/ROADMAP.md).
