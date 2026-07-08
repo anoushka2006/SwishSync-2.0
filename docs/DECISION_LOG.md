@@ -377,3 +377,27 @@ laptop is on.
 
 **Trade-off:** recall / false-positive are count-based proxies until A-S get
 per-frame ball ground-truth annotation.
+
+---
+
+## 2026-07-07 — M1 verdict: trained ball class REJECTED at every threshold
+
+**Decision:** the trained yolo11n's ball class is not adoptable at any
+confidence. Sweep (candidate ball + frozen baseline hoop, CORE clips):
+
+| conf | A | C | P | R | S |
+|---|---|---|---|---|---|
+| pins | 0.76 | 0.57 | 1.19 | 0.73 | 1.10 |
+| 0.50 | 22.6 | 10.2 | 69.5 | 24.4 | 38.3 |
+| 0.70 | 22.5 | 10.2 | 69.0 | 24.4 | 38.3 |
+| 0.85 | 5.6 | 10.3 | 66.5 | 24.3 | 42.1 |
+
+RMSE is threshold-INSENSITIVE → the false positives are high-confidence: the
+model confidently detects non-balls (or mislocalizes). A threshold cannot fix
+confident wrongness; only retraining can (M2: own-court frames, rim-only
+labels). Ball detector stays `yolov8n.pt`; hoop stays baseline weights.
+
+**Trade-off:** we forgo the recall win (E 5→63 pts, F/J shots found) until M2.
+**Retro:** sweep infra (Opus-built `--ball-conf` isolation knob) is reusable
+for every future detector — the experiment cost one script arg. Matches
+failure mode #1 (Wholesale Swap) prevention working as designed.

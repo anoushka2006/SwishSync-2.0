@@ -8,7 +8,7 @@ Status legend: [ ] not started · [~] in progress · [x] done
 
 ---
 
-## M1 — Salvage the trained ball detector (precision sweep)  [ ]
+## M1 — Salvage the trained ball detector (precision sweep)  [x] → REJECT
 
 **Goal:** keep the trained model's recall (63 pts on E vs 5 baseline; F/J shots
 found) without the false positives that blew CORE RMSE to 15–70px.
@@ -32,6 +32,11 @@ whether M2 needs a retrain or just a threshold.
 
 **Rollback:** trained ball rejected → ball stays `yolov8n.pt`; revisit after M2.
 
+**Outcome (2026-07-07): REJECT.** RMSE threshold-insensitive (P ~67-69px at
+every conf 0.5–0.85) → high-confidence false positives; retraining is the only
+fix. Sweep table + reasoning in DECISION_LOG. The `--ball-conf` isolation knob
+in `run_detector_benchmark.py` is reusable for every future candidate.
+
 ---
 
 ## M2 — Rim-only retrain v2 (own frames + rim-only labels)  [ ]
@@ -43,6 +48,10 @@ back-rim inconsistency the user flagged) and a ball class trained on OUR courts.
 1. (User) Annotate the 419 frames in `datasets/own_clips/images/` in Roboflow
    (`basketball-strategy/cv-cnfd4-eaond`): classes `basketball`, `rim`
    (ring ONLY — never net/backboard). ~2–3h manual.
+   Training-data policy (see docs/filming_spec.md): different shooters and
+   different camera angles are WANTED in training data from this batch onward —
+   detection must generalize. (Verdict geometry stays side-view; that's M-parked
+   "angle-aware geometry", not a training constraint.)
 2. (Haiku) Verify class balance + split via MCP `projects_get`.
 3. (Opus, money gate — ask user) `versions_generate` v2 → `trainings_create`
    yolov11n. Roboflow credits spent only on explicit "go".
@@ -63,7 +72,7 @@ back-rim inconsistency the user flagged) and a ball class trained on OUR courts.
 
 ---
 
-## M3 — Rim-bounce make/miss (C, L, N, Q)  [ ]  ← gated on M1 or M2
+## M3 — Rim-bounce make/miss (C, L, N, Q)  [ ]  ← gated on M2 (M1 rejected)
 
 **Goal:** rattle-in makes read as makes. Requires the ball to be *seen* during
 the rattle — that's why this is gated on a usable ball-at-rim detector.
@@ -142,7 +151,59 @@ M/O (by design).
 
 ---
 
+## M8 — New-clip intake & multi-shot benchmark  [ ]  ← starts when user delivers clips
+
+**Goal:** absorb the new filming batch (docs/filming_spec.md) into the
+benchmark, including multi-shot workout clips with per-shot ground truth.
+
+**Steps**
+1. (User) Film per the spec; note ordered outcomes per clip
+   (`clip_T: make, miss, make, ...`). Drop files in `videos/`.
+2. (Haiku) Inventory new clips; extend `CLIP_LABELS` with new letters/slugs.
+3. (Sonnet) Ground-truth schema v2: per-shot ordered labels
+   (`OUTCOME_GROUND_TRUTH_V2: dict[clip, list[verdict]]`), eval scores ALL
+   finalized shots per clip matched to labels by order — not just the primary.
+4. (Sonnet) Frame extraction for training doubles automatically
+   (`extract_training_frames.py` over new clips).
+5. (Opus) Categorize new clips CORE/STRESS/FAILURE; side-view single/multi-shot
+   clean clips are CORE candidates; new angles enter as STRESS only.
+
+**Success metrics**
+- Every new clip runs through the pipeline without crash.
+- Eval reports per-shot agreement: `sum(correct shots)/sum(labeled shots)`
+  across all clips (multi-shot counted shot-by-shot).
+- Shot-count accuracy: detected shot count == labeled count on ≥ 80% of
+  multi-shot clips (misses of count are their own failure row).
+- New-angle clips: tracked + arcs rendered (verdict exempt until angle-aware
+  geometry ships).
+
+## M9 — Workout session analytics  [ ]  ← gated on M8
+
+**Goal:** the "full shooting workout" product loop: one multi-shot video in →
+session stats out.
+
+**Steps**
+1. (Sonnet) Session summary from `finalized_shots`: attempts, makes, FG%,
+   per-shot entry angle, streaks; serialize `session.json` next to shots.json.
+2. (Sonnet) Eval-browser session view: per-clip shot list with verdicts +
+   the session stat line; shot chart per session once M5 calibration exists.
+3. (Opus) Judge against user-labeled workout clips from M8.
+
+**Success metrics**
+- `session.json` per clip: attempts == labeled shot count, makes == labeled
+  makes on clips where per-shot verdicts are all correct.
+- Browser shows the session line for every multi-shot clip.
+- FG% correct wherever the per-shot verdicts are correct (pure arithmetic —
+  any mismatch is a bug, not a model limit).
+
 ## Parked (revisit when triggered)
+
+- **Angle-aware verdict geometry** — make/miss for non-side camera angles
+  (rim-ellipse crossing instead of x-span). Trigger: M8 delivers new-angle
+  clips and their verdicts matter to the user.
+- **Multi-person shooter selection** — pose currently takes the top-confidence
+  person; workout clips with bystanders may need shooter tracking. Trigger:
+  first M8 clip where the wrong person gets the skeleton.
 
 - **WASB heatmap detection** — only if M1+M2 still miss far-court balls.
 - **Per-frame ball ground truth** on A–S — unlocks true recall/FP metrics

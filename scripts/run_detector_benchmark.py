@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,6 +20,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
 from swishsync_cv.config import DetectionConfig, PipelineConfig
+from swishsync_cv.detection import YoloObjectDetector
 from swishsync_cv.pipeline import run_pipeline
 from scripts.evaluate_testing_clips import CLIP_LABELS, slugify
 from scripts.run_full_eval_rerun import OUTCOME_GROUND_TRUTH, BASELINE_RMSE
@@ -26,9 +28,13 @@ from scripts.run_full_eval_rerun import OUTCOME_GROUND_TRUTH, BASELINE_RMSE
 TESTING = ROOT / "videos" / "Testing"
 CORE = set(BASELINE_RMSE)
 
+# Both configs share the frozen baseline hoop so the ONLY variable between the
+# two columns is the ball detector (model + confidence). CORE pins were produced
+# with a yolov8n ball; candidate-as-hoop is byte-identical on CORE, so pairing
+# the candidate ball with the baseline hoop is the clean single-variable isolation.
 BASELINE = dict(ball="yolov8n.pt", hoop=str(ROOT / "models/hoop_ball_yolov8_baseline.pt"))
 TRAINED = dict(ball=str(ROOT / "models/hoop_ball_yolov8.pt"),
-               hoop=str(ROOT / "models/hoop_ball_yolov8.pt"))
+               hoop=str(ROOT / "models/hoop_ball_yolov8_baseline.pt"))
 
 
 def _metrics(out_dir: Path) -> dict:
@@ -47,25 +53,66 @@ def _metrics(out_dir: Path) -> dict:
     }
 
 
-def _run(cfg: dict, tag: str) -> dict[str, dict]:
+def _run(
+    cfg: dict,
+    tag: str,
+    only: set[str] | None = None,
+    ball_conf: float | None = None,
+) -> dict[str, dict]:
     logging.disable(logging.INFO)
     rows = {}
     for filename, label in sorted(CLIP_LABELS.items(), key=lambda kv: kv[1]):
+        if only and label not in only:
+            continue
         video = TESTING / filename
         if not video.exists():
             continue
         out = ROOT / "outputs" / "temp" / f"bench_{tag}" / slugify(filename)
-        run_pipeline(PipelineConfig(
-            input_video=video, output_dir=out,
-            detection=DetectionConfig(model_path=cfg["ball"], hoop_model_path=cfg["hoop"]),
-        ))
+        detection = DetectionConfig(model_path=cfg["ball"], hoop_model_path=cfg["hoop"])
+        ball_detector = None
+        if ball_conf is not None:
+            # Raise ONLY the ball detector's confidence, and strip its hoop
+            # aliases so the candidate's `rim` class never feeds the hoop tracker
+            # — the baseline hoop model (built inside run_pipeline at its default
+            # 0.25 conf) alone locks the rim. Single-variable CORE isolation.
+            ball_detector = YoloObjectDetector(
+                replace(
+                    detection,
+                    confidence_threshold=ball_conf,
+                    hoop_model_path=None,
+                    hoop_aliases=(),
+                )
+            )
+        run_pipeline(
+            PipelineConfig(input_video=video, output_dir=out, detection=detection),
+            detector=ball_detector,
+        )
         rows[label] = _metrics(out)
     return rows
 
 
 def main() -> None:
-    base = _run(BASELINE, "baseline")
-    new = _run(TRAINED, "trained")
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--ball-conf",
+        type=float,
+        default=None,
+        help="Confidence threshold for the candidate ball detector only "
+        "(hoop detector stays at its default 0.25). Omit to use detector default.",
+    )
+    parser.add_argument(
+        "--only",
+        nargs="*",
+        help="Clip labels to run, e.g. A C P R S (default: all 19).",
+    )
+    args = parser.parse_args()
+    only = {x.upper() for x in args.only} if args.only else None
+    new_tag = f"cand{args.ball_conf:.2f}" if args.ball_conf is not None else "trained"
+
+    base = _run(BASELINE, "baseline", only=only)
+    new = _run(TRAINED, new_tag, only=only, ball_conf=args.ball_conf)
 
     def correct(label, m):
         gt = OUTCOME_GROUND_TRUTH.get(label)
