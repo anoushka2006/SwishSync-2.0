@@ -55,3 +55,26 @@ filter on read (never pipe the live run through grep).
 One short block: what shipped (commit hash), gate numbers (tests / CORE /
 agreement), what's next per the roadmap, and anything that needs the user
 (labels, calibration, credits, review).
+
+## 5. Retro — the ritual iterates itself
+
+After every ship, answer two questions in one line each:
+
+1. **What was traded off?** Anything accepted-but-imperfect (a threshold
+   guessed, a proxy metric, a deferred edge case) → record it in the
+   DECISION_LOG entry's **Trade-off** field. If the milestone made no entry,
+   a real trade-off forces one.
+2. **What slowed this milestone or nearly caused a mistake?** If it matches an
+   existing failure mode in CLAUDE.md → cite it in the report (reinforcement).
+   If it's NEW → same commit gets:
+   - a new row in CLAUDE.md's failure-mode table (name it, state the rule), and
+   - if this ritual itself was the gap, an edit to THIS skill file fixing it.
+
+Skill/manual edits ship inside the milestone commit — self-iteration is part
+of the milestone, not a separate chore. Never delete history from the
+DECISION_LOG or the failure-mode table; supersede with a new row/entry that
+points back (same rule as the decision log).
+
+Change log of this skill (newest first):
+- 2026-07-07: added self-iteration retro (this section).
+- 2026-07-06: initial ritual (gates → document → ship → report).

@@ -38,3 +38,12 @@ env (never hard-coded). Two modes:
 Target: forked CC-BY project `basketball-strategy/cv-cnfd4-eaond`. Annotate
 rim-only + ball. **Note:** true closed-loop active learning (auto-collect during
 inference) activates only after a model is trained and deployed.
+
+## Removed (2026-07-07)
+
+- `.claude/plugins/feature-dev` (explorer/architect/reviewer agents + command):
+  removed as a token burner. Its agents spawn subagents — a pattern that
+  previously consumed an entire session limit producing nothing (see
+  CLAUDE.md failure mode "no subagents"). Its useful content is superseded by
+  the operating manual + /milestone + /detector-bench + /diagnose-clip skills,
+  which run inline. Reinstallable from the plugin marketplace if ever wanted.
