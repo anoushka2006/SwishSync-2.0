@@ -1,6 +1,6 @@
-# GPU tier — same pipeline, GPU inference. Falls back to pipeline_cpu.yaml on a
-# device with no CUDA. Swapping tiers is this one field, never a rewrite.
-detector:   { name: rfdetr,    backend: cuda, weights: models/rfdetr_bball.pt }
-tracker:    { name: bytetrack }
+# GPU tier — SAME models, backend swap only (ultralytics device="cuda").
+# rf-detr becomes a candidate here after M2 dual-arch training + /detector-bench.
+detector:   { name: yolo,      backend: cuda, weights: models/hoop_ball_yolov8_baseline.pt }
+tracker:    { name: legacy_shot_engine }
 calibrator: { name: manual_4pt }
 events:     [ shot ]

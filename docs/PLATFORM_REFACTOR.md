@@ -36,7 +36,7 @@ event interface + legacy-fit adapter connect.
 ## The design in one rule
 
 `WHAT a model computes` (Detector/Tracker/EventDetector) is separate from
-`WHERE it runs` (backend: cpu/cuda/triton/http). CPU-only stays a supported tier
+`WHERE it runs` (backend: cpu/cuda). CPU-only stays a supported tier
 forever; GPU is a config swap, never a rewrite.
 
 ## Migration plan (how the old engine moves over, safely)
@@ -44,13 +44,19 @@ forever; GPU is a config swap, never a rewrite.
 1. **[done here]** Platform skeleton + `ShotEventDetector` adapter that calls the
    existing `swishsync_cv.tracking.parabola.fit_weighted_parabola_robust`.
 2. Wrap the current YOLO detector as `swishsync.vision.detection.yolo` behind the
-   `Detector` interface (backend=cpu).
-3. Add a `bytetrack` tracker impl behind `Tracker`.
-4. Route one CORE clip through the new `Pipeline`.
-   **Exit gate:** shot output byte-identical to the legacy pipeline
-   (`scripts/verify_core_drift.py` semantics — CORE `|ΔRMSE| ≤ 0.15`, ideally 0).
-5. Port the remaining shot-lifecycle stages, retiring `swishsync_cv` module by
-   module. Delete the old package only when every CORE clip is byte-identical.
+   `Detector` interface (backend supplies the device).
+3. Wrap the legacy engine WHOLESALE as `legacy_shot_engine` (sparse buffer +
+   ShotCandidateManager + finalize as one Tracker; no ByteTrack — a
+   multi-object Kalman tracker for one ball changes association and breaks the
+   gate). Rationale: ~90% of shot correctness is candidate selection
+   (gates/lifecycle), not the fitter — fitting raw tracks can never match.
+4. Route CORE clips through the platform via `scripts/run_platform_clip.py`.
+   **Exit gate:** `weighted_residual_rmse` identical to the legacy runner to
+   1e-9 per CORE clip (hard fail above 0.15). Adapter work never edits
+   `swishsync_cv` (`git diff src/swishsync_cv` empty).
+5. Split the wholesale wrap into true stages one seam at a time (MP-C),
+   re-running the gate after each split; retire `swishsync_cv` module by module.
+   Delete the old package only when every CORE clip is byte-identical.
 
 ## Guardrails carried over
 

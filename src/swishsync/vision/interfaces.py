@@ -25,10 +25,20 @@ class Detector(ABC):
 
 
 class Tracker(ABC):
-    """per-frame detections -> tracks. Assigns track_ids; never assigns team."""
+    """per-frame detections -> tracks. Assigns track_ids, nothing semantic.
+
+    `frame` (raw pixels) and `t_ms` are optional context: pure trackers ignore
+    them; the Phase-A wholesale legacy engine needs pixels (hoop color refine,
+    rim rescan). The parameter dissolves when stages split in MP-C."""
 
     @abstractmethod
-    def update(self, detections: list[Detection], frame_index: int) -> None:
+    def update(
+        self,
+        detections: list[Detection],
+        frame_index: int,
+        t_ms: float = 0.0,
+        frame=None,
+    ) -> None:
         ...
 
     @abstractmethod

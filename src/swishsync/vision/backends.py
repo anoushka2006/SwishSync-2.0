@@ -6,9 +6,11 @@ inference is local CPU torch, a CUDA engine, a Triton client, or an HTTP API.
 Switching tiers is a config change (backend: cpu|cuda|triton|http), never a
 rewrite.
 
-Only the CPU/null backend is implemented in this scaffold. The GPU/remote
-backends are stubs that raise a clear NotImplementedError so the abstraction is
-present and the wiring is obvious, without pulling torch into a CPU-only import.
+Backends are device PROVIDERS: ultralytics-style models take a `device=`
+argument and own their preprocessing, so `run()` simply executes the model with
+the backend's device. cpu is mandatory; cuda is the optional accelerator.
+Remote backends (triton/http) were trimmed as YAGNI — re-add when a remote GPU
+actually exists (DECISION_LOG 2026-07-09).
 """
 
 from __future__ import annotations
@@ -37,45 +39,20 @@ class CpuBackend(InferenceBackend):
 
 
 class CudaBackend(InferenceBackend):
-    """Local GPU execution (torch.cuda). Stub — implement when a GPU model lands."""
+    """Local GPU execution. The model contract is ultralytics-style: it accepts
+    the device at call time; this backend supplies `device="cuda"`. Falls back
+    loudly (torch raises) on machines with no CUDA — tier selection is the
+    config's job, not silent downgrade."""
 
     device = "cuda"
 
-    def run(self, model: Any, inputs: Any) -> Any:  # pragma: no cover
-        raise NotImplementedError(
-            "CudaBackend not implemented yet. Wire torch.cuda here."
-        )
-
-
-class TritonBackend(InferenceBackend):
-    """Remote GPU via Triton Inference Server. Stub."""
-
-    device = "remote"
-
-    def __init__(self, url: str = "localhost:8000") -> None:
-        self.url = url
-
-    def run(self, model: Any, inputs: Any) -> Any:  # pragma: no cover
-        raise NotImplementedError("TritonBackend not implemented yet.")
-
-
-class HttpBackend(InferenceBackend):
-    """Hosted inference endpoint (e.g. HF/Roboflow). Stub."""
-
-    device = "remote"
-
-    def __init__(self, url: str = "") -> None:
-        self.url = url
-
-    def run(self, model: Any, inputs: Any) -> Any:  # pragma: no cover
-        raise NotImplementedError("HttpBackend not implemented yet.")
+    def run(self, model: Any, inputs: Any) -> Any:  # pragma: no cover - GPU env
+        return model(inputs)
 
 
 _BACKENDS: dict[str, type[InferenceBackend]] = {
     "cpu": CpuBackend,
     "cuda": CudaBackend,
-    "triton": TritonBackend,
-    "http": HttpBackend,
 }
 
 

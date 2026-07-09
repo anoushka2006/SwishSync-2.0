@@ -51,7 +51,7 @@ class Pipeline:
         if self.detector is not None and self.tracker is not None:
             for frame_index, t_ms, pixels in frames:
                 dets = self.detector.detect(pixels, frame_index, t_ms)
-                self.tracker.update(dets, frame_index)
+                self.tracker.update(dets, frame_index, t_ms, frame=pixels)
                 if self.calibrator is not None and result.court is None:
                     result.court = self.calibrator.calibrate(pixels, frame_index)
             result.tracks = self.tracker.tracks()

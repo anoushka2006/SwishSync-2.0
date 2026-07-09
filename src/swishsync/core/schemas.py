@@ -32,21 +32,13 @@ class ObjectClass(str, Enum):
     BALL = "ball"
     HOOP = "hoop"
     BACKBOARD = "backboard"
-    REFEREE = "referee"
 
 
 class EventType(str, Enum):
-    """Basketball events. Only SHOT is implemented in this scaffold."""
+    """Basketball events. SHOT is the product; new kinds arrive with a
+    SCHEMA_VERSION bump when they are real (see PRD out-of-scope list)."""
 
     SHOT = "shot"
-    POSSESSION = "possession"  # placeholder — not implemented
-    REBOUND = "rebound"  # placeholder — not implemented
-
-
-class Team(str, Enum):
-    HOME = "home"
-    AWAY = "away"
-    UNKNOWN = "unknown"
 
 
 BBox = tuple[float, float, float, float]  # x1, y1, x2, y2 (pixels)
@@ -69,9 +61,6 @@ class Detection:
     cls: ObjectClass
     bbox_xyxy: BBox
     conf: float
-    # optional appearance embedding for team-classification / ReID. Riding on the
-    # detection avoids a second inference pass later.
-    embedding: tuple[float, ...] | None = None
 
     @property
     def center(self) -> tuple[float, float]:
@@ -95,14 +84,12 @@ class TrackState:
 
 @dataclass
 class Track:
-    """One object followed across frames. team/jersey are assigned downstream,
-    never by the tracker."""
+    """One object followed across frames. Semantic roles (shooter etc.) are
+    assigned downstream, never by the tracker."""
 
     track_id: int
     cls: ObjectClass
     states: list[TrackState] = field(default_factory=list)
-    team: Team | None = None
-    jersey: int | None = None
 
 
 @dataclass
@@ -127,7 +114,6 @@ class WorldEntity:
     y: float
     vx: float = 0.0
     vy: float = 0.0
-    team: Team | None = None
 
 
 @dataclass
