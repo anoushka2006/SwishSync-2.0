@@ -132,9 +132,17 @@ back-rim inconsistency the user flagged) and a ball class trained on OUR courts.
 
 ## M3 — Rim-contact flight end + rim-bounce verdicts  [ ]  ← gated on M2
 
-**Spec (user, 2026-07-09):** flight ENDS at first ball∩rim-box contact; arc
-renders release→contact; post-contact motion = verdict evidence only (bounce-up
-after hoop-box contact ⇒ miss); ball stays tracked before/after (trail).
+**Spec (user, 2026-07-09; refined 2026-07-10):** flight ENDS at first
+ball∩rim-box contact; arc renders release→contact; ball stays tracked
+before/after (trail). Post-contact motion is verdict EVIDENCE, weighed not
+decisive:
+- bounce-up after hoop contact ⇒ LIKELY miss — overridable by later
+  below-ring-inside evidence (batch-2 has roll-around-rim-and-in clips that
+  would fool a hard rule).
+- make-confirmation: after a predicted make, ball tracked falling DIRECTLY
+  below the rim ⇒ confirmation signal (already the rescan below-ring rule;
+  formalize as confirmation weight). Doubles with M5 court projection later:
+  landing position in court space should sit under the hoop.
 Fit-affecting boundary change ⇒ CORE gate + explicit go.
 
 **Goal:** rattle-in makes read as makes. Requires the ball to be *seen* during
@@ -266,6 +274,18 @@ session stats out.
 - Browser shows the session line for every multi-shot clip.
 - FG% correct wherever the per-shot verdicts are correct (pure arithmetic —
   any mismatch is a bug, not a model limit).
+
+## M10 — miss_subtype classification  [ ]  ← gated on M2 + M3 (user-approved 2026-07-10)
+
+Render-only `miss_subtype` on missed shots: `airball` (fitted descending branch
+never enters rim x-span AND no rim-zone contact), `rim_out` (rim contact then
+outside emergence), `short` (arc apex/reach short of rim plane). Pure geometry,
+no model training. Gated on M2 weights (trustworthy near-rim trajectories) so
+the classifier learns basketball, not the detector's blind spots.
+
+**Success metrics:** every labeled miss in the batches gets a subtype; zero
+make/miss verdict changes (evidence-only field); subtype agreement reviewed by
+user on the labeled misses before the field leaves "provisional".
 
 ## Parked (revisit when triggered)
 

@@ -494,3 +494,24 @@ AFTER M2 weights make near-rim trajectories trustworthy: geometric test =
 fitted descending branch never enters rim x-span AND no rim-zone contact ⇒
 airball. Teaching a model this before detection is robust would learn the
 detector's blind spots, not basketball.
+
+---
+
+## 2026-07-10 — Verdict evidence rules refined; keys secured; annotation guidance
+
+**Annotation rule (user asked):** annotate EVERY visible instance — both rims,
+both people, any ball. Unlabeled instances are label noise (teach the model
+"some rims aren't rims"). Rim SELECTION is pipeline logic, never the detector's.
+
+**Verdict rules (user, queued behind annotations/M2):** bounce-up after hoop
+contact is LIKELY-miss evidence, not a verdict — batch-2 contains
+roll-around-rim-and-in clips that would fool a hard rule. Make-confirmation:
+ball falling directly below rim after a predicted make = confirmation weight
+(doubles with M5 court projection: court-space landing under the hoop).
+M3 spec updated. miss_subtype promoted to milestone M10 (post-M2/M3).
+
+**Keys secured:** audit found NO keys in tracked files or git history (REST
+calls kept them in shell only). `.env` created (git-ignored, verified via
+`git check-ignore`), `.env.example` committed, uploader auto-reads `.env`
+(stdlib loader, no python-dotenv dep). Rule: keys live in `.env` only — never
+in repo files, scripts, or docs.

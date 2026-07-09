@@ -22,6 +22,19 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROJECT = "basketball-strategy/cv-cnfd4-eaond"
 
 
+def _load_dotenv_key(name: str) -> str | None:
+    """Minimal .env reader (KEY=value lines) — no python-dotenv dep."""
+
+    env_file = ROOT / ".env"
+    if not env_file.exists():
+        return None
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        if line.startswith(f"{name}="):
+            return line.split("=", 1)[1].strip()
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Roboflow annotation uploader")
     parser.add_argument("--own-clips", action="store_true")
@@ -30,9 +43,9 @@ def main() -> int:
     parser.add_argument("--batch", default="swishsync-own", help="Roboflow batch name")
     args = parser.parse_args()
 
-    key = os.environ.get("ROBOFLOW_API_KEY")
+    key = os.environ.get("ROBOFLOW_API_KEY") or _load_dotenv_key("ROBOFLOW_API_KEY")
     if not key:
-        print("Set ROBOFLOW_API_KEY env var first.", file=sys.stderr)
+        print("Set ROBOFLOW_API_KEY (env var or .env file).", file=sys.stderr)
         return 2
 
     if args.own_clips:
