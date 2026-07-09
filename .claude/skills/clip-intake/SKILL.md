@@ -20,6 +20,12 @@ training half — never block frame extraction on labels.
 
 ## 2. Ask the user for per-shot labels (blocking for benchmark only)
 
+Build the labeling page so the user can watch and label in one place:
+`python scripts/build_intake_browser.py` → serve →
+`http://localhost:8000/outputs/temp/intake/index.html` (processed videos with
+overlays, one outcomes input per clip, "Copy all labels" assembles the reply).
+Run this AFTER step 3's crash-run (the page plays processed.mp4).
+
 Ordered outcomes per clip, e.g. `T: make, miss, make`. One label per shot, in
 shot order (filming spec told them to jot these). Rules:
 - User-confirmed labels ONLY enter ground truth (failure mode #10) — never
