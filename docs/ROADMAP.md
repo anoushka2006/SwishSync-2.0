@@ -121,12 +121,21 @@ back-rim inconsistency the user flagged) and a ball class trained on OUR courts.
 - CORE drift gate passes with v2 as hoop.
 - Ball at rim: ≥ 1 detection ≥ 0.35 conf inside the rim crop during ball
   arrival on D, E, G (today: 0 — the source of their `unknown`s).
+- Busy-background ball detection (2026-07-09 batch): measured points ≥ 8 on
+  T/U/AC/AD/AE (today ball tracks mostly against sky only — training bias).
+- AA-class hoop lock: dusk/two-hoop clip AA locks ON the ring (frame-verified),
+  not the net.
 
 **Rollback:** keep current weights; own frames remain annotated (sunk cost 0).
 
 ---
 
-## M3 — Rim-bounce make/miss (C, L, N, Q)  [ ]  ← gated on M2 (M1 rejected)
+## M3 — Rim-contact flight end + rim-bounce verdicts  [ ]  ← gated on M2
+
+**Spec (user, 2026-07-09):** flight ENDS at first ball∩rim-box contact; arc
+renders release→contact; post-contact motion = verdict evidence only (bounce-up
+after hoop-box contact ⇒ miss); ball stays tracked before/after (trail).
+Fit-affecting boundary change ⇒ CORE gate + explicit go.
 
 **Goal:** rattle-in makes read as makes. Requires the ball to be *seen* during
 the rattle — that's why this is gated on a usable ball-at-rim detector.
@@ -138,6 +147,7 @@ the rattle — that's why this is gated on a usable ball-at-rim detector.
 3. (Sonnet) Unit tests for each rule change.
 
 **Success metrics**
+- Arc never extends past first rim contact on any labeled clip (frame check).
 - C, L, N, Q verdict == make.
 - Zero previously-correct clips flip wrong (wrong-verdict count strictly
   decreases).
@@ -205,7 +215,14 @@ M/O (by design).
 
 ---
 
-## M8 — New-clip intake & multi-shot benchmark  [ ]  ← starts when user delivers clips
+## M8 — New-clip intake & multi-shot benchmark  [~]  ← labels recorded 2026-07-09
+
+Batch 1 done through intake: 15 clips (T–AI; Y deleted), 28 per-shot labels in
+OUTCOME_GROUND_TRUTH_V2, zero crashes, 328 training frames extracted, labeling
+page shipped (scripts/build_intake_browser.py). Detected 14/28 shots → add:
+**multi-shot detection recovery** — find why shots after the first don't start
+(cooldown/idle gating/sparse stride between shots), fix behind the CORE gate,
+score with per-shot eval.
 
 **Goal:** absorb the new filming batch (docs/filming_spec.md) into the
 benchmark, including multi-shot workout clips with per-shot ground truth.

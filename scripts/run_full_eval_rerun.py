@@ -46,6 +46,34 @@ BASELINE_RMSE = {
 
 # User-confirmed make/miss ground truth (2026-07-05). F and J contain real
 # shots the pipeline currently never detects (FAILURE clips).
+# User-confirmed PER-SHOT ground truth for the 2026-07-09 intake batch (M8).
+# Ordered outcomes per clip; clip Y was deleted (incomplete). Files live in
+# videos/ root; letters are permanent. 28 shots: 13 make / 15 miss.
+INTAKE_FILES = {
+    "T": "IMG_2241 2.mov", "U": "IMG_2241 3.mov", "V": "IMG_2241.mov",
+    "W": "IMG_2242 2.mov", "X": "IMG_2242 3.mov", "Z": "IMG_2242.mov",
+    "AA": "IMG_2243 2.MOV", "AB": "IMG_2243.MOV", "AC": "IMG_2245 2.mov",
+    "AD": "IMG_2245 3.mov", "AE": "IMG_2245.mov", "AF": "IMG_2246 2.mov",
+    "AG": "IMG_2246 3.mov", "AH": "IMG_2246.mov", "AI": "IMG_2247.MOV",
+}
+OUTCOME_GROUND_TRUTH_V2 = {
+    "T": ["miss"],
+    "U": ["miss", "miss", "miss"],
+    "V": ["make"],
+    "W": ["miss"],
+    "X": ["miss", "miss"],
+    "Z": ["make"],
+    "AA": ["miss", "make"],
+    "AB": ["make", "miss"],
+    "AC": ["make", "make", "miss"],
+    "AD": ["miss", "make", "miss"],
+    "AE": ["make", "make", "miss"],
+    "AF": ["make", "miss"],
+    "AG": ["make"],
+    "AH": ["make", "make"],
+    "AI": ["miss"],
+}
+
 OUTCOME_GROUND_TRUTH = {
     "A": "make", "B": "miss", "C": "make", "D": "miss", "E": "miss",
     "F": "make", "G": "miss", "H": "miss", "I": "miss", "J": "miss",

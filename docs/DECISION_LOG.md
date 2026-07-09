@@ -460,3 +460,37 @@ now named failure modes (#13 The Stalled Marathon, #14 The Stale Path) with
 rules: agents prove ONE clip then stop, main session runs sweeps; always use
 the current session's scratchpad, mkdir -p first. Conventions updated:
 scoped-gruntwork spawns sanctioned, babysitting banned.
+
+---
+
+## 2026-07-09 — Intake batch labeled; flight-end spec; airball direction
+
+**Ground truth recorded:** 15 clips (T–AI, Y deleted as incomplete), 28
+user-confirmed per-shot labels (13 make / 15 miss) in
+`run_full_eval_rerun.OUTCOME_GROUND_TRUTH_V2` + `INTAKE_FILES`. Pipeline
+detected only 14 of 28 shots — the multi-shot gap is now measured (M8).
+
+**AA hoop-lock diagnosis (frame-verified):** lock chose the correct near hoop
+(two hoops in frame) but sits low on the net — dusk lighting defeats the
+orange rim refine on this court. Fix routes through M2 training data (these
+frames are in the annotation batch), not an ad-hoc threshold tweak.
+
+**User observations feeding M2:** ball detects reliably only against sky/white
+background — training-data bias; annotation must prioritize busy-background
+(buildings/trees/court) frames. Ball detection weak on all new clips (also
+camera quality); several arcs ingested post-rim-bounce points.
+
+**Flight-end spec accepted (reshapes M3):** a shot's flight ENDS at the first
+ball-detection ∩ rim-box contact. Arc renders release→contact only. Post-
+contact motion is verdict evidence (bounce-up after hoop-box contact ⇒ miss —
+already the rescan rule) and render-trail, never fit input. Ball remains
+tracked before and after (trail). Fit-affecting boundary change ⇒ CORE gate +
+explicit go before default-on.
+
+**Airball direction (user asked; recommendation adopted):** airball stays
+classified as `miss` NOW — that output is already correct and honest; no code
+change needed. A render-only `miss_subtype` (airball / rim_out / short) lands
+AFTER M2 weights make near-rim trajectories trustworthy: geometric test =
+fitted descending branch never enters rim x-span AND no rim-zone contact ⇒
+airball. Teaching a model this before detection is robust would learn the
+detector's blind spots, not basketball.
