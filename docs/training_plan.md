@@ -44,6 +44,11 @@ Deploy -> Download Weights (ultralytics/yolov11 .pt) -> save to
 `models/hoop_ball_yolo11n.pt`. (Not automated: no MCP weight-download tool, and
 the roboflow SDK install risks clobbering opencv.)
 
+**Frame uploads are REST, never SDK** (2026-07-09): the uploader script and the
+curl path both hit `api.roboflow.com/dataset/<slug>/upload` directly. Key note:
+the classic 20-char private key works for this endpoint; the `rf_`-prefixed key
+does NOT (401). Batch `swishsync-own-clips` holds the own-court frames.
+
 **Then, laptop on:**
 ```bash
 scripts/wire_and_eval.sh          # comparison + full make/miss eval, trained weights

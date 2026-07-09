@@ -48,20 +48,29 @@ def main() -> int:
         print(f"No .jpg frames in {src}", file=sys.stderr)
         return 1
 
-    try:
-        from roboflow import Roboflow
-    except ImportError:
-        print("pip install roboflow", file=sys.stderr)
-        return 2
+    # REST upload — deliberately NO roboflow SDK (its install clobbered opencv
+    # once; see DECISION_LOG). requests ships with ultralytics. Roboflow
+    # dedupes by content hash, so reruns are safe/resumable.
+    import requests
 
-    workspace, project_slug = args.project.split("/", 1)
-    rf = Roboflow(api_key=key)
-    project = rf.workspace(workspace).project(project_slug)
+    project_slug = args.project.split("/", 1)[1]
+    url = (
+        f"https://api.roboflow.com/dataset/{project_slug}/upload"
+        f"?api_key={key}&batch={args.batch}"
+    )
+    ok = failed = 0
     for image in images:
-        project.upload(str(image), batch_name=args.batch)
-        print(f"uploaded {image.name}")
-    print(f"\n{len(images)} frames → {args.project} (batch '{args.batch}'). Annotate rim-only + ball.")
-    return 0
+        with open(image, "rb") as fh:
+            response = requests.post(url, files={"file": (image.name, fh)}, timeout=60)
+        body = response.json() if response.ok else {}
+        if body.get("success") or body.get("duplicate"):
+            ok += 1
+        else:
+            failed += 1
+            print(f"FAIL {image.name}: {response.text[:160]}", file=sys.stderr)
+    print(f"\n{ok} uploaded / {failed} failed → {args.project} (batch '{args.batch}'). "
+          "Annotate rim-only + ball.")
+    return 0 if failed == 0 else 1
 
 
 if __name__ == "__main__":
