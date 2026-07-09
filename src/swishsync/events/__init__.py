@@ -1,0 +1,1 @@
+"""SwishSync platform package."""

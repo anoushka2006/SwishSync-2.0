@@ -1,0 +1,6 @@
+# GPU tier — same pipeline, GPU inference. Falls back to pipeline_cpu.yaml on a
+# device with no CUDA. Swapping tiers is this one field, never a rewrite.
+detector:   { name: rfdetr,    backend: cuda, weights: models/rfdetr_bball.pt }
+tracker:    { name: bytetrack }
+calibrator: { name: manual_4pt }
+events:     [ shot ]

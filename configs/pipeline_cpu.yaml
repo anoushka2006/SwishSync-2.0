@@ -1,0 +1,6 @@
+# CPU-only tier — the mandatory fallback. No GPU required.
+# Same pipeline as GPU config; only `backend` differs.
+detector:   { name: yolo,      backend: cpu, weights: models/hoop_ball_yolov8.pt }
+tracker:    { name: bytetrack }
+calibrator: { name: manual_4pt }
+events:     [ shot ]
