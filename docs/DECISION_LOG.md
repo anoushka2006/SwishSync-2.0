@@ -438,3 +438,25 @@ in docs/PRD.md.
 **Trade-off:** two packages coexist during migration (import-path duality)
 until every CORE clip is byte-identical through the platform, then
 `swishsync_cv` retires module by module.
+
+---
+
+## 2026-07-09 — MP-B PASS: legacy engine behind platform interfaces, CORE exact
+
+**Result:** all five CORE clips through the platform Pipeline
+(`YoloDetector` + `LegacyShotEngine` + `run_platform_clip.py`) match the legacy
+runner to **exact float equality** (delta 0.000e+00 on A/C/P/R/S). 167 tests
+pass; `git diff src/swishsync_cv` empty; smoke OK. MP-C (stage split + GPU
+tier) is unblocked.
+
+**Trade-offs accepted:** engine reads `ShotCandidateManager._cooldown` (private)
+for finalize reasons — documented adapter introspection, dissolves at MP-C.
+`Tracker.update` ignores its `detections` arg in the wholesale shape (engine
+must control stride/ROI detection itself; that's WHY the gate is exact).
+
+**Retro (ritual self-iteration):** the Sonnet build agent stalled mid-sweep —
+second stall of this kind — and a rerun died on a stale scratchpad path. Both
+now named failure modes (#13 The Stalled Marathon, #14 The Stale Path) with
+rules: agents prove ONE clip then stop, main session runs sweeps; always use
+the current session's scratchpad, mkdir -p first. Conventions updated:
+scoped-gruntwork spawns sanctioned, babysitting banned.

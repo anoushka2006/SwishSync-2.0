@@ -199,8 +199,12 @@ Detector evaluation: `/detector-bench`. Clip visual debugging: `/diagnose-clip`.
   Reusing an in-repo adapter needs no check.
 - **New subsystem / risky experiment → new `feature/<name>` branch** (see
   Branch workflow). Small fixes stay inline.
-- **Subagents: don't.** A spawn burned an entire session limit producing
-  nothing. Build inline; spawn only if the user explicitly asks.
+- **Subagents: scoped gruntwork only.** User-sanctioned routing: Haiku reads,
+  Sonnet builds, via tight self-contained briefs (the original ban came from an
+  underscoped spawn burning a session limit). Agents deliver the smallest
+  verifiable gate then STOP and report — they never babysit long local runs
+  (failure mode #13). Judging, shipping, and anything long-running stays in the
+  main session.
 
 ### Failure modes — named, with the rule that prevents each
 
@@ -218,6 +222,9 @@ Detector evaluation: `/detector-bench`. Clip visual debugging: `/diagnose-clip`.
 | 10 | **Assumed ground truth** | Visually-derived make/miss labels; user corrected 3 of them | Derived labels are provisional; only user-confirmed labels enter `OUTCOME_GROUND_TRUTH` |
 | 11 | **Un-gated commit** | Committing/merging without the user seeing a summary | Plain-English summary from the actual diff → wait for "go" (or a standing, scoped authorization) |
 | 12 | **Stale-API confidence** | Writing against a remembered external API | context7 for current docs before new external-library code |
+| 13 | **The Stalled Marathon** | Agent babysits a multi-clip sweep in its own context; watchdog kills it mid-run (happened twice: M1 sweep, MP-B gate) | Agents build + prove the smallest gate (ONE clip), then stop and report; the MAIN session runs full sweeps as background Bash and judges |
+| 14 | **The Stale Path** | Redirecting output to a scratchpad path remembered from summarized context; dir no longer exists, run dies at the redirect | Use the CURRENT session's scratchpad from the system prompt; `mkdir -p` before any redirect into it |
+| 15 | **The Two-Package Drift** | "Fixing" migration mismatches by editing `swishsync_cv` from the platform branch | Adapter work NEVER edits `swishsync_cv`; `git diff src/swishsync_cv` stays empty until the gated port (CLAUDE.md platform rules) |
 
 ### Quality bars — checkable, run before calling anything done
 

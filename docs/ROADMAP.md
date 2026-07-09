@@ -16,7 +16,7 @@ model-agnostic stages + GPU-optional backends, **CPU-only always runs
 end-to-end**. Runs in parallel with the product track below; merges only
 through PR + your "go".
 
-## MP-A — Phase A scaffold  [~]
+## MP-A — Phase A scaffold  [x]
 
 IR schemas, registry, backends (cpu|cuda), interfaces, ShotEventDetector
 adapter over the legacy fit, smoke test. Applied from the reviewed patch, then
@@ -26,7 +26,7 @@ ByteTrack→`single_ball`, migration step 4 rewritten to wholesale-engine wrap.
 **Success metrics:** `smoke_platform.py` prints SMOKE OK; platform tests pass
 alongside the existing suite; legacy pipeline byte-untouched (CORE gate green).
 
-## MP-B — Legacy engine behind platform interfaces + CORE-clip gate  [ ]
+## MP-B — Legacy engine behind platform interfaces + CORE-clip gate  [x]
 
 (Sonnet builds, Opus judges) `swishsync.vision.detection.yolo` wraps the
 existing YoloObjectDetector behind `Detector` (backend supplies device);
@@ -41,7 +41,7 @@ buffer + ShotCandidateManager + finalize_shot wholesale. New
 - Zero changes inside `swishsync_cv` (adapter-only; `git diff src/swishsync_cv`
   empty).
 
-## MP-C — Stage split + GPU tier  [ ]  ← gated on MP-B
+## MP-C — Stage split + GPU tier  [ ]  ← UNBLOCKED (MP-B passed 2026-07-09)
 
 Split the wholesale wrap into true detect→track→event stages one seam at a
 time, re-running the MP-B gate after each split. Then wire `backend: cuda`
