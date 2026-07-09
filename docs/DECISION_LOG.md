@@ -401,3 +401,40 @@ labels). Ball detector stays `yolov8n.pt`; hoop stays baseline weights.
 **Retro:** sweep infra (Opus-built `--ball-conf` isolation knob) is reusable
 for every future detector — the experiment cost one script arg. Matches
 failure mode #1 (Wholesale Swap) prevention working as designed.
+
+---
+
+## 2026-07-09 — Platform refactor accepted (GPU-optional, CPU-mandatory)
+
+**Decision:** adopt the Phase-A platform architecture on
+`feature/platform-refactor`: IR-mediated stages (`src/swishsync/`, coexists
+with `swishsync_cv` during migration), plugin registry, and the WHAT/WHERE
+split — Detector/Tracker/EventDetector define WHAT runs, an inference backend
+(cpu | cuda) defines WHERE. **CPU-only end-to-end stays a hard requirement**;
+GPU is a config line (`backend: cuda`), never a rewrite. PRD + North Star land
+in docs/PRD.md.
+
+**Amendments accepted with the proposal (Fable review):**
+1. *Migration gate fix:* byte-identical CORE output is unreachable by fitting
+   raw ball tracks — ~90% of correctness lives in candidate selection
+   (gates/lifecycle/floor_idle/rescan), not the fitter. Phase-A step 4 wraps
+   the legacy engine WHOLESALE (sparse buffer + ShotCandidateManager +
+   finalize) as the first Tracker/EventDetector; stages split later, each
+   split re-gated.
+2. *No ByteTrack:* multi-object Kalman tracking for one ball adds a dep and
+   changes association → breaks byte-identical. First tracker = `single_ball`
+   wrapping existing logic; ByteTrack only when multi-player exists.
+3. *Backends trimmed to cpu|cuda:* ultralytics takes `device=` directly, so
+   CudaBackend hands the device string to the model. triton/http stubs cut
+   (YAGNI; re-add when a remote GPU exists).
+4. *IR trimmed to shipped scope:* Team/jersey/REFEREE/POSSESSION/REBOUND
+   removed (PRD lists them out of scope); SCHEMA_VERSION exists for their
+   return.
+5. *M2 trains BOTH yolov11n and rf-detr-nano* on the same v2 dataset;
+   /detector-bench decides on CORE + CPU fps. RF-DETR is the Apache-2.0
+   commercial path but CPU speed is unproven — data decides, not license
+   preference.
+
+**Trade-off:** two packages coexist during migration (import-path duality)
+until every CORE clip is byte-identical through the platform, then
+`swishsync_cv` retires module by module.

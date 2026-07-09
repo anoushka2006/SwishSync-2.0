@@ -3,8 +3,58 @@
 Each milestone: goal → execution steps (with model lane) → success metrics
 (checkable, not adjectives) → rollback. A milestone ships only when its metrics
 pass AND the standing quality bars in CLAUDE.md pass. Ship ritual: `/milestone`.
+Product definition + North Star: [docs/PRD.md](PRD.md).
 
 Status legend: [ ] not started · [~] in progress · [x] done
+
+---
+
+# Platform track (branch `feature/platform-refactor`)
+
+Architecture change under the same product (see DECISION_LOG 2026-07-09):
+model-agnostic stages + GPU-optional backends, **CPU-only always runs
+end-to-end**. Runs in parallel with the product track below; merges only
+through PR + your "go".
+
+## MP-A — Phase A scaffold  [~]
+
+IR schemas, registry, backends (cpu|cuda), interfaces, ShotEventDetector
+adapter over the legacy fit, smoke test. Applied from the reviewed patch, then
+amended: IR trimmed to shipped scope, backends trimmed to cpu|cuda,
+ByteTrack→`single_ball`, migration step 4 rewritten to wholesale-engine wrap.
+
+**Success metrics:** `smoke_platform.py` prints SMOKE OK; platform tests pass
+alongside the existing suite; legacy pipeline byte-untouched (CORE gate green).
+
+## MP-B — Legacy engine behind platform interfaces + CORE-clip gate  [ ]
+
+(Sonnet builds, Opus judges) `swishsync.vision.detection.yolo` wraps the
+existing YoloObjectDetector behind `Detector` (backend supplies device);
+`single_ball` Tracker + `legacy_shot` EventDetector wrap SparseBallDetection
+buffer + ShotCandidateManager + finalize_shot wholesale. New
+`scripts/run_platform_clip.py` routes CORE clips through the platform Pipeline.
+
+**Success metrics (exit gate):**
+- Clip C through platform Pipeline: `weighted_residual_rmse` identical to the
+  legacy runner to 1e-9 (byte-identical goal; hard fail above 0.15).
+- All 5 CORE clips within the same gate before MP-B closes.
+- Zero changes inside `swishsync_cv` (adapter-only; `git diff src/swishsync_cv`
+  empty).
+
+## MP-C — Stage split + GPU tier  [ ]  ← gated on MP-B
+
+Split the wholesale wrap into true detect→track→event stages one seam at a
+time, re-running the MP-B gate after each split. Then wire `backend: cuda`
+through the detector (ultralytics `device=`) and prove the GPU tier on a CUDA
+machine (or defer proof until one exists — config lands either way, CPU output
+unchanged).
+
+**Success metrics:** every split lands with the CORE gate green; cpu/gpu
+configs differ by the backend line only; CPU-only machine runs the full suite.
+
+---
+
+# Product track (branch `feature/ball-tracking`)
 
 ---
 
@@ -52,6 +102,10 @@ back-rim inconsistency the user flagged) and a ball class trained on OUR courts.
    different camera angles are WANTED in training data from this batch onward —
    detection must generalize. (Verdict geometry stays side-view; that's M-parked
    "angle-aware geometry", not a training constraint.)
+   **Dual-arch (2026-07-09):** train BOTH yolov11n (fast CPU, AGPL) and
+   rf-detr-nano (Apache-2.0, CPU speed unproven) on the same v2 dataset — one
+   extra credit run; /detector-bench decides on CORE + CPU fps. The winner
+   becomes the platform default detector plugin.
 2. (Haiku) Verify class balance + split via MCP `projects_get`.
 3. (Opus, money gate — ask user) `versions_generate` v2 → `trainings_create`
    yolov11n. Roboflow credits spent only on explicit "go".

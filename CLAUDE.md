@@ -118,6 +118,28 @@ Stored as `ShotCandidate.trusted_flight_debug`. **Not read by the fitter in this
 
 Canonical eval artifacts live in `outputs/eval/shot_story/`. See `docs/benchmark_suite.md` for per-clip expectations and pass/fail criteria.
 
+## Platform refactor (branch `feature/platform-refactor`)
+
+Architecture migration in progress — product scope unchanged (PRD + North Star:
+[docs/PRD.md](docs/PRD.md)). `src/swishsync/` is the model-agnostic platform
+(IR schemas, plugin registry, Detector/Tracker/EventDetector interfaces,
+cpu|cuda backends). It **coexists** with `swishsync_cv` until every CORE clip
+is byte-identical through the platform Pipeline; then the legacy package
+retires module by module.
+
+Rules that govern the migration (details: DECISION_LOG 2026-07-09, roadmap
+MP-A/B/C):
+- **CPU-only must always run end-to-end.** GPU is `backend: cuda` in config —
+  an accelerator, never a requirement.
+- **WHAT vs WHERE:** stages define what a model computes; backends define
+  where it runs. Detector swaps are config lines.
+- **Wholesale first:** the legacy engine (sparse buffer + ShotCandidateManager
+  + finalize) wraps behind platform interfaces as one unit; stages split only
+  after the CORE byte-identical gate passes, one seam at a time, re-gated each
+  split.
+- Adapter work never edits `swishsync_cv` internals (`git diff src/swishsync_cv`
+  stays empty on the refactor branch until the port begins).
+
 ## Model lane (work routing)
 
 Work autoroutes to the right model tier. Route silently; don't announce routine routing.
