@@ -200,6 +200,12 @@ class HoopLockTracker:
         rim_bbox = refine_rim_bbox(frame, self._lock.bbox_xyxy, self.config)
         if rim_bbox is None:
             return False
+        # sanity check (user spec 2026-07-10): the ring must sit INSIDE the
+        # hoop box and toward its TOP. A "rim" found low in the box is the net
+        # or floor clutter (clip AA locked on the net at dusk) — reject it and
+        # keep retrying on later frames; None falls back to legacy geometry.
+        if not rim_within_hoop_top(rim_bbox, self._lock.bbox_xyxy):
+            return False
         self._lock = replace(self._lock, rim_bbox_xyxy=rim_bbox)
         return True
 
@@ -472,3 +478,28 @@ def _ema(previous: float, current: float, alpha: float) -> float:
 
 def math_hypot(x: float, y: float) -> float:
     return float((x * x + y * y) ** 0.5)
+
+
+def rim_within_hoop_top(
+    rim_bbox: tuple[float, float, float, float],
+    hoop_bbox: tuple[float, float, float, float],
+    horizontal_tolerance_ratio: float = 0.05,
+    top_band_ratio: float = 0.6,
+) -> bool:
+    """True when the ring band sits inside the hoop box, in its upper region.
+
+    The ring is physically the top of the hoop structure; anything detected in
+    the bottom 40% of the hoop box is net/clutter, not the ring.
+    """
+
+    rx1, ry1, rx2, ry2 = rim_bbox
+    hx1, hy1, hx2, hy2 = hoop_bbox
+    tol = (hx2 - hx1) * horizontal_tolerance_ratio
+    inside = (
+        rx1 >= hx1 - tol
+        and rx2 <= hx2 + tol
+        and ry1 >= hy1 - tol
+        and ry2 <= hy2 + tol
+    )
+    toward_top = ry2 <= hy1 + (hy2 - hy1) * top_band_ratio
+    return inside and toward_top

@@ -145,3 +145,49 @@ def test_hoop_lock_revalidation_keeps_anchor_without_matching_detection():
     assert tracker.lock is not None
     assert tracker.lock.center_x == previous.center_x
     assert tracker.lock.center_y == previous.center_y
+
+
+def test_rim_within_hoop_top_accepts_ring_band():
+    from swishsync_cv.tracking.hoop_lock import rim_within_hoop_top
+
+    hoop = (100.0, 100.0, 200.0, 220.0)
+    ring = (105.0, 105.0, 195.0, 125.0)  # upper band
+    assert rim_within_hoop_top(ring, hoop)
+
+
+def test_rim_within_hoop_top_rejects_net_band():
+    from swishsync_cv.tracking.hoop_lock import rim_within_hoop_top
+
+    hoop = (100.0, 100.0, 200.0, 220.0)
+    net = (110.0, 180.0, 190.0, 215.0)  # bottom 40% = net (the AA failure)
+    assert not rim_within_hoop_top(net, hoop)
+
+
+def test_rim_within_hoop_top_rejects_outside_box():
+    from swishsync_cv.tracking.hoop_lock import rim_within_hoop_top
+
+    hoop = (100.0, 100.0, 200.0, 220.0)
+    outside = (60.0, 105.0, 140.0, 125.0)  # sticks out left beyond tolerance
+    assert not rim_within_hoop_top(outside, hoop)
+
+
+def test_refine_rejects_low_rim_and_keeps_retrying():
+    import numpy as np
+    from swishsync_cv.tracking import hoop_lock as hl
+
+    tracker = hl.HoopLockTracker(HoopLockConfig(min_acquisition_observations=2,
+                                                lock_confidence=0.35))
+    frame = _orange_hoop_frame()
+    for i in range(4):
+        tracker.update(i, frame, [_hoop_detection(0)])
+    assert tracker.is_locked
+    # force a low "rim" candidate: monkeypatch refine to return a net-band box
+    lock_box = tracker.lock.bbox_xyxy
+    low_band = (lock_box[0] + 2, lock_box[3] - 6, lock_box[2] - 2, lock_box[3] - 1)
+    original = hl.refine_rim_bbox
+    hl.refine_rim_bbox = lambda *a, **k: low_band
+    try:
+        assert tracker._refine_rim_bbox_once(frame) is False
+        assert tracker.lock.rim_bbox_xyxy is None  # rejected, still retryable
+    finally:
+        hl.refine_rim_bbox = original
