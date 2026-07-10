@@ -102,10 +102,13 @@ back-rim inconsistency the user flagged) and a ball class trained on OUR courts.
    different camera angles are WANTED in training data from this batch onward —
    detection must generalize. (Verdict geometry stays side-view; that's M-parked
    "angle-aware geometry", not a training constraint.)
-   **Dual-arch (2026-07-09):** train BOTH yolov11n (fast CPU, AGPL) and
-   rf-detr-nano (Apache-2.0, CPU speed unproven) on the same v2 dataset — one
-   extra credit run; /detector-bench decides on CORE + CPU fps. The winner
-   becomes the platform default detector plugin.
+   **Dual-arch (updated 2026-07-10):** full-dataset run trains YOLO26 Nano
+   (Ultralytics successor: NMS-free, faster CPU inference — supersedes yolov11
+   in-family) and RF-DETR Small (Apache-2.0, "needs less data", non-ultralytics
+   so requires an adapter); /detector-bench decides on CORE + CPU fps. The
+   2026-07-10 PROBE run stays yolov11n deliberately: same arch as the failed
+   v1 model isolates the data variable (failure mode #1). Verify installed
+   ultralytics loads YOLO26 .pt before committing M2 to it.
 2. (Haiku) Verify class balance + split via MCP `projects_get`.
 3. (Opus, money gate — ask user) `versions_generate` v2 → `trainings_create`
    yolov11n. Roboflow credits spent only on explicit "go".
