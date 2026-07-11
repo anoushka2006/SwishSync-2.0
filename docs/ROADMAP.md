@@ -131,6 +131,16 @@ back-rim inconsistency the user flagged) and a ball class trained on OUR courts.
 
 **Rollback:** keep current weights; own frames remain annotated (sunk cost 0).
 
+**Probe outcome (2026-07-11, `hoop_ball_v2probe.pt`, yolov11n on partial
+annotations):** direction VALIDATED, weights not adopted — full read-out in
+DECISION_LOG 2026-07-11. Hoop: 19/19 locks at frame 3, B/C dx outliers fixed;
+remaining dx misses F/G/H (2027 series). Ball: recall up on 19/19 clips
+(F and J now track); RMSE blowups are the missing flight-end segmentation, so
+flight-end logic is a HARD PREREQUISITE for adopting any strong ball model.
+Annotation priority for the remaining frames: 2027-series court/angle, then
+rim-contact/occlusion moments, then new shooters/angles; clean-flight ball
+frames are saturated.
+
 ---
 
 ## M3 — Rim-contact flight end + rim-bounce verdicts  [ ]  ← gated on M2

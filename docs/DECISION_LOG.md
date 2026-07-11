@@ -515,3 +515,82 @@ calls kept them in shell only). `.env` created (git-ignored, verified via
 `git check-ignore`), `.env.example` committed, uploader auto-reads `.env`
 (stdlib loader, no python-dotenv dep). Rule: keys live in `.env` only — never
 in repo files, scripts, or docs.
+
+---
+
+## 2026-07-11 — Independent code-reviewer agent (Fable framework, cheaper seats)
+
+**Decision:** Add `.claude/agents/code-reviewer.md` — a review agent that
+encodes the Fable-tier review method as an explicit, literal procedure
+(scope lanes → invariants gate → intent-vs-implementation → failure-scenario
+hunting → evidence grading → quality bars → verdict rules). It runs on Opus
+(Sonnet on fallback); the procedure, not the model tier, carries the quality.
+
+**Why:** Fable won't stay free; review quality must survive the downgrade.
+Encoding the judgment layer as checkable steps (e.g. "no failure scenario ⇒
+not a bug finding", "metric moved without a named mechanism ⇒ finding, not a
+win") lets a smaller model reproduce most of the value.
+
+**Independence rule:** the reviewer is never given the coder session's chat,
+plan, or rationale — it reviews the diff cold and re-derives intent from diff
++ repo docs. Same-context review inherits the coder's blindspots; the repo's
+own history (RMSE "improvement" via truncated arcs, silent baseline re-pins)
+is exactly the class of thing a cold reader catches and a warm one rationalizes.
+
+**Alternatives rejected:**
+- Reviewing in the coder's session: cheapest, but biased — the reviewer would
+  read the coder's own justifications as evidence.
+- /code-review skill only: good generic bug hunt, but doesn't enforce repo
+  invariants (render/fit boundary, baseline immutability, two-package drift)
+  or the block/approve decision rules.
+
+**Wiring:** CLAUDE.md model-lane + production-guardrail sections updated —
+reviewer verdict rides with every milestone/PR summary; BLOCK stops the ship
+until addressed or user-overridden.
+
+---
+
+## 2026-07-11 — v2probe (yolo11n, partial own-annotations) bench: NOT adopted; training direction VALIDATED
+
+**Decision:** `models/hoop_ball_v2probe.pt` is not wired as the active detector,
+but the M2 retrain direction it probes is validated on both classes. Continue
+annotating the remaining own-clip frames and proceed to the YOLO26 Nano
+full-dataset train.
+
+**Hoop class (isolated): near-adoptable.** 19/19 auto-locks at frame 3
+(bar ≤ 18); the two documented dx outliers are fixed (B −68→−5.9, C +59→+9.6).
+Tight ring-only boxes confirmed visually (clip C frame 15: ring box vs v8's
+hoop+net box). Two consequences block immediate adoption:
+1. Convention shift: `rim_center_y = bbox_xyxy[3]` now lands ~50–90px higher
+   (ring bottom, not net bottom). Every rim-relative threshold (shot-start,
+   floor cutoff rim+100px, rim anchor, outcome zones) was tuned to the old
+   convention → CORE start-frames move later and RMSE pins shift (all 5 CORE
+   clips drift, in the *lower* direction). Adoption requires a deliberate
+   re-pin with this entry as the named cause, not a silent one.
+2. Remaining dx misses vs the ≤15px bar: F +40.9, H +24.5, G +16.7 — all
+   2027-series clips.
+
+**Ball class (isolated, baseline hoop): major recall win, blocked by
+segmentation, not by the model.** Measured points improved on 19/19 clips
+(+10…+61; far-court E 5→63, H 7→68, I 4→48, K 4→51 — target was 1.5×, got
+8–12×). Both accepted-failure clips now track (F 28 pts, J 22 pts, J fits at
+RMSE 6.06). RMSE blowups (15–70) are threshold-insensitive (conf sweep
+0.5/0.7/0.85 barely moves them) because the detections are REAL: the model
+keeps tracking the ball through rim contact and the rebound (verified on P:
+flight f92–117 identical to baseline at conf 0.85–0.9, then rebound f118–149
+merges a second arc into the fit). Verdict flips A make→miss, B miss→make ride
+that mechanism. The old detector's rim-contact dropout was doing flight-end
+segmentation by accident; a strong detector needs the real flight-end logic
+(spec already recorded 2026-07-09) BEFORE any strong ball model can be adopted.
+
+**Annotation guidance for the remaining frames (in value order):**
+1. 2027-series court/angle frames — the only remaining rim dx failures (F/G/H).
+2. Rim-contact and occlusion moments (ball on/inside ring, hands near ball) —
+   this is where flight-end logic will need detector reliability.
+3. New shooters/angles per filming_spec — detection generalization.
+Ball-in-clean-flight frames are the LOWEST priority: recall there is already
+saturated. Per 2026-07-10 rule: annotate every visible instance.
+
+**YOLO26 gate:** unchanged from M2 — verify ultralytics loads a YOLO26 .pt
+end-to-end (CPU) before committing the full train to it; per-class isolation
+bench + this same adoption ceremony apply to the full-dataset weights.

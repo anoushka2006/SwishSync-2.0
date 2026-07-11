@@ -151,10 +151,20 @@ Work autoroutes to the right model tier. Route silently; don't announce routine 
 | **UP** | Fable 5 | Design, danger, money **only**: architecture, production debugging, security review, migrations. Never routine coding. ~20% of work max. |
 
 - **Fallback:** if a model is down/unavailable, drop one tier (Fable → Opus → Sonnet → Haiku) and say so. For anything risky, stop before substituting.
+- **Review seat is an agent, not a model:** `.claude/agents/code-reviewer.md`
+  encodes the review framework (Fable-derived, written as an explicit
+  procedure) so it runs on Opus today and Sonnet after fallback — the
+  procedure is the reviewer, not the tier. It reviews diffs **cold**: never
+  hand it the coder's chat context, plan, or rationale; it re-derives intent
+  from the diff and repo docs so coder blindspots don't propagate into review.
 
 ## Production guardrails
 
 - Everything production-bound is guarded: branch → PR → automated checks → merge → deploy → verify.
+- Before any milestone commit or PR summary of a nontrivial change, the
+  `code-reviewer` agent reviews the diff and its verdict rides with the
+  summary. A BLOCK verdict stops the ship until addressed or explicitly
+  overridden by the user.
 - The AI never merges itself. It presents a plain-English summary derived from the **actual code diff** and waits for an explicit "go".
 - If in doubt or underspecified: ask, don't assume.
 
