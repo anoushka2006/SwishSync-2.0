@@ -109,6 +109,9 @@ back-rim inconsistency the user flagged) and a ball class trained on OUR courts.
    2026-07-10 PROBE run stays yolov11n deliberately: same arch as the failed
    v1 model isolates the data variable (failure mode #1). Verify installed
    ultralytics loads YOLO26 .pt before committing M2 to it.
+   ✅ VERIFIED 2026-07-11: ultralytics 8.4.53 loads `yolo26n.pt`, CPU
+   NMS-free predict OK, and full pipeline end-to-end on clip C (shot + fit).
+   Stock weights kept at `models/yolo26n_coco_stock.pt`. No upgrade needed.
 2. (Haiku) Verify class balance + split via MCP `projects_get`.
 3. (Opus, money gate — ask user) `versions_generate` v2 → `trainings_create`
    yolov11n. Roboflow credits spent only on explicit "go".
