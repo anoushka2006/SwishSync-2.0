@@ -1,0 +1,61 @@
+# Python caches and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local environment and editor files
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/
+
+# Computer vision datasets, videos, and generated outputs
+videos/*
+!videos/.gitkeep
+outputs/*
+!outputs/.gitkeep
+runs/
+tmp/
+temp/
+
+# Model weights and exported inference engines
+models/*
+!models/.gitkeep
+*.pt
+*.pth
+*.onnx
+*.engine
+*.tflite
+
+# Video/image artifacts generated during experiments
+*.mov
+*.MOV
+*.mp4
+*.MP4
+*.avi
+*.mkv
+*.webm
+*.jpg
+*.jpeg
+*.png
+
+# Pipeline debug exports
+*.jsonl
+detections.csv
+trajectory.json
