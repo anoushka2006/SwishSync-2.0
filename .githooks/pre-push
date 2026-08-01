@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# CORE RMSE regression gate before code leaves local (guardrail: verify before
+# anything heads toward production). Skips cleanly when the local video/weights
+# workspace is absent. Bypass with `git push --no-verify` if intentional.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+# only gate when tracking/detection code changed vs the upstream branch
+RANGE="origin/$(git rev-parse --abbrev-ref HEAD)...HEAD"
+if git rev-parse --verify --quiet "origin/$(git rev-parse --abbrev-ref HEAD)" >/dev/null; then
+  CHANGED=$(git diff --name-only "$RANGE" 2>/dev/null || git diff --name-only HEAD~1)
+else
+  CHANGED=$(git diff --name-only HEAD~1 2>/dev/null || echo "")
+fi
+
+if ! echo "$CHANGED" | grep -qE '^src/swishsync_cv/((tracking|detection)/|config\.py|pipeline\.py)'; then
+  exit 0
+fi
+
+echo "pre-push: pipeline code changed → CORE drift check"
+python scripts/check_core_drift.py

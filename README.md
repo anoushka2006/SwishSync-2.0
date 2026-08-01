@@ -39,7 +39,7 @@ Branching guidance lives in [`docs/repository-workflow.md`](docs/repository-work
 Local CV artifacts belong in top-level workspace folders and are ignored by Git:
 
 - `videos/` for raw/local clips
-- `outputs/` for processed videos, debug frames, and detection exports
+- `outputs/` for processed videos, debug frames, and detection exports — see [`outputs/README.md`](outputs/README.md) and [`docs/output_workflow.md`](docs/output_workflow.md)
 - `models/` for YOLO weights and exported model files
 - `notebooks/` for exploratory notebooks
 
@@ -207,10 +207,21 @@ Outputs:
 
 ```text
 outputs/
+  eval/shot_story/       # canonical 19-clip eval (see docs/output_workflow.md)
+  showcase/              # demo-ready exports
+  temp/                  # ad-hoc CLI runs
+  debug/                 # bbox experiments, drift checks
+```
+
+Single CLI run (prefer a named folder under `temp/`):
+
+```text
+outputs/temp/my_run/
   processed.mp4
   detections.jsonl
   detections.csv
   trajectory.json
+  shots.json
   debug_frames/          # only when --save-debug-frames is used
 ```
 
